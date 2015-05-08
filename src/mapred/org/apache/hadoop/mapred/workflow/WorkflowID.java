@@ -16,12 +16,38 @@
  */
 package org.apache.hadoop.mapred.workflow;
 
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.ID;
+
 /**
  * WorkflowID represents the immutable and unique identifier for the workflow.
- * WorkflowID consists of two parts. First part represents
- *
+ * 
+ * This class is the same as JobID, though is re-implemented as jtIdentifier is
+ * private in the JobID class (as opposed to extending JobID as we require a
+ * WORKFLOW string rather than a JOB string).
  */
-// See JobID
-public class WorkflowID {
+public class WorkflowID extends org.apache.hadoop.mapred.ID implements
+    Comparable<ID> {
 
+  protected static final String WORKFLOW = "workflow";
+  private final Text jtIdentifier;
+
+  // Workflowid regex for various tools and framework components.
+  public static final String WORKFLOWID_REGEX = WORKFLOW + SEPARATOR + "[0-9]+"
+      + SEPARATOR + "[0-9]+";
+
+  /**
+   * Construct a WorkflowID object.
+   * 
+   * @param jtIdentifier A jobTracker identifier.
+   * @param id A job number.
+   */
+  public WorkflowID(String jtIdentifier, int id) {
+    super(id);
+    this.jtIdentifier = new Text(jtIdentifier);
+  }
+
+  public String getJtIdentifier() {
+    return jtIdentifier.toString();
+  }
 }

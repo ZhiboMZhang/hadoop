@@ -18,25 +18,34 @@ package org.apache.hadoop.mapred.workflow;
 
 import java.io.IOException;
 
+import org.apache.hadoop.mapred.JobTracker;
+
 /**
  * A listener for changes in a {@link WorkflowInProgress workflow}'s lifecycle
- * in the ... ?
- *
+ * in the @ link JobTracker} .
  */
 public interface WorkflowInProgressListener {
 
   /**
+   * Invoked when a new workflow has been added to the {@link JobTracker}.
    * 
+   * @param workflow The added workflow.
+   * @throws IOException
    */
   public void worfklowAdded(WorkflowInProgress workflow) throws IOException;
 
   /**
+   * Invoked when a workflow has been removed from the {@link JobTracker}.
    * 
+   * @param workflow The removed workflow.
    */
   public void workflowRemoved(WorkflowInProgress workflow);
 
   /**
+   * Invoked when a workflow has been updated in the {@link JobTracker}. This
+   * change in the workflow is tracked using a {@link WorkflowChangeEvent}.
    * 
+   * @param event the event that tracks the change.
    */
   public void workflowUpdated(WorkflowChangeEvent event);
 }

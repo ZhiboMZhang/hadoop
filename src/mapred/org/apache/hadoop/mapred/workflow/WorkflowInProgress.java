@@ -16,10 +16,29 @@
  */
 package org.apache.hadoop.mapred.workflow;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 /**
- * WorkflowInProgress maintains all the info for keeping a Workflow valid.
+ * WorkflowInProgress maintains all the info for keeping a Workflow valid. It
+ * keeps a {@link WorkflowProfile} and a {@link WorkflowStatus}, in addition to
+ * other data for bookkeeping of its Jobs.
  */
-// See JobInProgress.
-public interface WorkflowInProgress {
+public class WorkflowInProgress {
+
+  /**
+   * Used when the kill signal is issued to a workflow which is initializing.
+   */
+  @SuppressWarnings("serial")
+  static class KillInterruptedException extends InterruptedException {
+    public KillInterruptedException(String msg) {
+      super(msg);
+    }
+  }
+
+  static final Log LOG = LogFactory.getLog(WorkflowInProgress.class);
+
+  private WorkflowProfile profile;
+  private WorkflowStatus status;
 
 }
