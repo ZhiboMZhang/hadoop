@@ -16,11 +16,34 @@
  */
 package org.apache.hadoop.mapred.workflow;
 
+import java.io.IOException;
+
 /**
  * <code>RunningWorkflow</code> is the user-interface to query for details on a
  * running Map-Reduce workflow.
  */
-// See RunningJob.
 public interface RunningWorkflow {
+
+  /**
+   * Get the workflow identifier.
+   * 
+   * @return the workflow identifier.
+   */
+  public WorkflowID getID();
+
+  /**
+   * Get the name of the workflow.
+   * 
+   * @return the name of the workflow.
+   */
+  public String getWorkflowName();
+
+  /**
+   * Get failure information for the workflow.
+   * 
+   * @return the failure information for the workflow.
+   * @throws IOException
+   */
+  public String getFailureInfo() throws IOException;
 
 }

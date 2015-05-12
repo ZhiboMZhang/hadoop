@@ -23,6 +23,7 @@ public class WorkflowSubmitter {
 
   // Entry point for execution of workflow scheduling.
   public static void main(String[] args) {
+    // TODO: Better usage string.
     String usage = "workflow configuration-file.xml";
 
     if (args.length != 1) {
@@ -32,7 +33,7 @@ public class WorkflowSubmitter {
 
     // Validate the input configuration.
     String fileName = args[0];
-    WorkflowConf workflowConf = new WorkflowConf(fileName);
+    // WorkflowConf workflowConf = new WorkflowConf(fileName);
 
     // use code from hadoop.util.RunJar to check jar config?
 

@@ -16,6 +16,10 @@
  */
 package org.apache.hadoop.mapred.workflow;
 
+import java.io.IOException;
+
+import org.apache.hadoop.ipc.VersionedProtocol;
+import org.apache.hadoop.mapred.ClusterStatus;
 import org.apache.hadoop.mapred.JobTracker;
 
 /**
@@ -23,7 +27,25 @@ import org.apache.hadoop.mapred.JobTracker;
  * communicate. The {@link WorkflowClient} can use these methods to submit a
  * Workflow for execution, and learn about the current system status.
  */
-// See JobSubmissionProtocol.
-public class WorkflowSubmissionProtocol {
+public interface WorkflowSubmissionProtocol extends VersionedProtocol {
+
+  public static long versionID = 1L;
+
+  /**
+   * Allocate a name for the workflow.
+   * 
+   * @return A unique workflow name for submitting workflows.
+   * @throws IOException
+   */
+  public WorkflowID getNewWorkflowId() throws IOException;
+
+  /**
+   * Get the current status of the cluster.
+   * 
+   * @param If true, return a detailed report containing everything.
+   * @return A summary of the state of the cluster.
+   */
+  // TODO
+  public ClusterStatus getClusterStatus(boolean detailed);
 
 }
