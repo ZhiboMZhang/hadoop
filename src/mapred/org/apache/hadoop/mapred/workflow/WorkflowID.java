@@ -16,6 +16,11 @@
  */
 package org.apache.hadoop.mapred.workflow;
 
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+import java.text.NumberFormat;
+
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.ID;
 
@@ -31,6 +36,12 @@ public class WorkflowID extends org.apache.hadoop.mapred.ID implements
 
   protected static final String WORKFLOW = "workflow";
   private final Text jtIdentifier;
+
+  protected static final NumberFormat idFormat = NumberFormat.getInstance();
+  static {
+    idFormat.setGroupingUsed(false);
+    idFormat.setMinimumIntegerDigits(4);
+  }
 
   // Workflowid regex for various tools and framework components.
   public static final String WORKFLOWID_REGEX = WORKFLOW + SEPARATOR + "[0-9]+"
@@ -59,5 +70,53 @@ public class WorkflowID extends org.apache.hadoop.mapred.ID implements
 
   public String getJtIdentifier() {
     return jtIdentifier.toString();
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (!super.equals(other)) {
+      return false;
+    }
+
+    WorkflowID that = (WorkflowID) other;
+    return jtIdentifier.equals(that.jtIdentifier) && (id == that.id);
+  }
+
+  @Override
+  public int hashCode() {
+    return jtIdentifier.hashCode() + id;
+  }
+
+  @Override
+  public int compareTo(ID other) {
+    WorkflowID that = (WorkflowID) other;
+    int jtComp = jtIdentifier.compareTo(that.jtIdentifier);
+    if (jtComp == 0) {
+      return this.id - that.id;
+    } else {
+      return jtComp;
+    }
+  }
+
+  @Override
+  public String toString() {
+    StringBuilder stringBuilder = new StringBuilder(WORKFLOW);
+    stringBuilder.append(SEPARATOR);
+    stringBuilder.append(jtIdentifier);
+    stringBuilder.append(SEPARATOR);
+    stringBuilder.append(idFormat.format(id));
+    return stringBuilder.toString();
+  }
+
+  @Override
+  public void readFields(DataInput in) throws IOException {
+    super.readFields(in);
+    jtIdentifier.readFields(in);
+  }
+
+  @Override
+  public void write(DataOutput out) throws IOException {
+    super.write(out);
+    jtIdentifier.write(out);
   }
 }
