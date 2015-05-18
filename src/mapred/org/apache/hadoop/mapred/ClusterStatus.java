@@ -236,7 +236,6 @@ public class ClusterStatus implements Writable {
         .size(), ttExpiryInterval, maps, reduces, maxMaps, maxReduces, state,
         numDecommissionNodes, Runtime.getRuntime().totalMemory(), Runtime
             .getRuntime().maxMemory());
-    System.out.println("in clusterstatus constructor");
 
     this.activeTrackers = activeTrackers;
     this.blacklistedTrackers = blacklistedTrackers;
