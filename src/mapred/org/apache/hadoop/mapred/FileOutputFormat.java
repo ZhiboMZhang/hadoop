@@ -24,6 +24,7 @@ import java.text.NumberFormat;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.compress.CompressionCodec;
+import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapreduce.security.TokenCache;
 import org.apache.hadoop.util.Progressable;
 
@@ -132,6 +133,18 @@ public abstract class FileOutputFormat<K, V> implements OutputFormat<K, V> {
    * the map-reduce job.
    */
   public static void setOutputPath(JobConf conf, Path outputDir) {
+    outputDir = new Path(conf.getWorkingDirectory(), outputDir);
+    conf.set("mapred.output.dir", outputDir.toString());
+  }
+
+  /**
+   * Set the {@link Path} of the output directory for the map-reduce workflow.
+   *
+   * @param conf The configuration of the workflow.
+   * @param outputDir the {@link Path} of the output directory for the
+   *          map-reduce workflow.
+   */
+  public static void setOutputPath(WorkflowConf conf, Path outputDir) {
     outputDir = new Path(conf.getWorkingDirectory(), outputDir);
     conf.set("mapred.output.dir", outputDir.toString());
   }

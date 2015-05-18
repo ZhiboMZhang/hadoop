@@ -36,6 +36,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
+import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapreduce.security.TokenCache;
 import org.apache.hadoop.net.NetworkTopology;
 import org.apache.hadoop.net.Node;
@@ -293,12 +294,25 @@ public abstract class FileInputFormat<K, V> implements InputFormat<K, V> {
   }
 
   /**
-   * Add the given comma separated paths to the list of inputs for
-   *  the map-reduce job.
+   * Sets the given comma separated paths as the list of inputs for the
+   * map-reduce workflow.
    * 
-   * @param conf The configuration of the job 
-   * @param commaSeparatedPaths Comma separated paths to be added to
-   *        the list of inputs for the map-reduce job.
+   * @param conf Configuration of the workflow.
+   * @param commaSeparatedPaths Comma separated paths to be set as the list of
+   *          inputs for the map-reduce workflow.
+   */
+  public static void setInputPaths(WorkflowConf conf, String commaSeparatedPaths) {
+    setInputPaths(conf,
+        StringUtils.stringToPath(getPathStrings(commaSeparatedPaths)));
+  }
+
+  /**
+   * Add the given comma separated paths to the list of inputs for the
+   * map-reduce job.
+   * 
+   * @param conf The configuration of the job
+   * @param commaSeparatedPaths Comma separated paths to be added to the list of
+   *          inputs for the map-reduce job.
    */
   public static void addInputPaths(JobConf conf, String commaSeparatedPaths) {
     for (String str : getPathStrings(commaSeparatedPaths)) {
@@ -326,11 +340,31 @@ public abstract class FileInputFormat<K, V> implements InputFormat<K, V> {
   }
 
   /**
-   * Add a {@link Path} to the list of inputs for the map-reduce job.
+   * Set the array of {@link Path}s as the list of inputs for the map-reduce
+   * workflow.
    * 
-   * @param conf The configuration of the job 
-   * @param path {@link Path} to be added to the list of inputs for 
-   *            the map-reduce job.
+   * @param conf Configuration of the job.
+   * @param inputPaths the {@link Path}s of the input directories/files for the
+   *          map-reduce workflow.
+   */
+  public static void setInputPaths(WorkflowConf conf, Path... inputPaths) {
+    Path path = new Path(conf.getWorkingDirectory(), inputPaths[0]);
+    StringBuffer str = new StringBuffer(StringUtils.escapeString(path
+        .toString()));
+    for (int i = 1; i < inputPaths.length; i++) {
+      str.append(StringUtils.COMMA_STR);
+      path = new Path(conf.getWorkingDirectory(), inputPaths[i]);
+      str.append(StringUtils.escapeString(path.toString()));
+    }
+    conf.set("mapred.input.dir", str.toString());
+  }
+
+  /**
+   * /** Add a {@link Path} to the list of inputs for the map-reduce job.
+   * 
+   * @param conf The configuration of the job
+   * @param path {@link Path} to be added to the list of inputs for the
+   *          map-reduce job.
    */
   public static void addInputPath(JobConf conf, Path path ) {
     path = new Path(conf.getWorkingDirectory(), path);
