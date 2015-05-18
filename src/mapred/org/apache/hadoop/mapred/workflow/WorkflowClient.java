@@ -90,15 +90,22 @@ public class WorkflowClient extends Configured {
       return null;
     }
 
+    @Override
+    public WorkflowStatus getWorkflowStatus() throws IOException {
+      return null;
+    }
+
   }
 
   private UserGroupInformation ugi;
   private WorkflowSubmissionProtocol rpcWorkflowSubmitClient;
   private WorkflowSubmissionProtocol workflowSubmitClient;
 
+  private Path stagingAreaDir = null;
+
   /**
    * Constructor for the WorkflowClient.
-   * 
+   *
    * @param conf A {@link WorkflowConf} configuration.
    * @throws IOException
    */
@@ -109,7 +116,7 @@ public class WorkflowClient extends Configured {
 
   /**
    * Connect to the default {@link JobTracker}.
-   * 
+   *
    * @param conf The workflow configuration.
    * @throws IOException
    */
@@ -193,10 +200,14 @@ public class WorkflowClient extends Configured {
   }
 
   /**
-   * TODO
-   * 
-   * @param workflow
-   * @return
+   * Submit a workflow to the map-reduce system.
+   *
+   * This function returns a handle to the {@link RunningWorkflow} which can be
+   * used to track the execution of the running workflow.
+   *
+   * @param workflow The workflow configuration.
+   *
+   * @return A handle to the {@link RunningWorkflow}.
    * @throws FileNotFoundException
    * @throws IOException
    */
@@ -213,7 +224,7 @@ public class WorkflowClient extends Configured {
 
   /**
    * Internal method for submitting workflows to the system.
-   * 
+   *
    * @param workflow The workflow configuration to submit.
    * @return A proxy object for running the workflow.
    * @throws FileNotFoundException
@@ -233,15 +244,17 @@ public class WorkflowClient extends Configured {
         WorkflowConf workflowCopy = workflow;
 
         // Set up the workflow staging area.
-        // Path stagingArea = WorkflowSubmissionFiles.getStagingDir(
-        // WorkflowClient.this, workflowCopy);
+        // TODO
+        Path stagingArea = WorkflowSubmissionFiles.getStagingDir(
+            WorkflowClient.this, workflowCopy);
         WorkflowID workflowId = workflowSubmitClient.getNewWorkflowId();
-        // Path submitWorkflowDir = new Path(stagingArea,
-        // workflowId.toString());
-        // workflowCopy.set("mapreduce.workflow.dir",
-        // submitWorkflowDir.toString());
+        Path submitWorkflowDir = new Path(stagingArea, workflowId.toString());
+        workflowCopy.set("mapreduce.workflow.dir", submitWorkflowDir.toString());
 
         // Generate the scheduling plan.
+        // TODO - how to split workflow in multiple jobs to run
+        // -> should put each workflow-job working directory in workflow dir
+        // ->
         WorkflowStatus status = null;
 
         // Get cluster status information from the JobTracker.
@@ -269,16 +282,32 @@ public class WorkflowClient extends Configured {
 
         // Submit the Submitter job.
 
+
+        WorkflowProfile profile = workflowSubmitClient.getWorkflowProfile(null);
+        if (status != null && profile != null) {
+          return new NetworkedWorkflow(status, profile, workflowSubmitClient);
+        } else {
+          throw new IOException("Could not launch workflow.");
+        }
+
         // Clean up if things go wrong.
-        return new NetworkedWorkflow(null, null, null);
+
       }
     });
+  }
+
+  public Path getStagingAreaDir() throws IOException {
+    if (stagingAreaDir == null) {
+      stagingAreaDir = new Path(
+          workflowSubmitClient.getWorkflowStagingAreaDir());
+    }
+    return stagingAreaDir;
   }
 
   /**
    * Configure the {@link WorkflowConf} of the user with the given command-line
    * options (-libjars, -files, -archives). Also, TODO workflow related things.
-   * 
+   *
    * @param workflow The workflow configuration.
    * @param submitWorkflowDir The directory used by the workflow when submitted.
    * @throws IOException
@@ -299,13 +328,14 @@ public class WorkflowClient extends Configured {
     // Write the WorkflowConf into a file (WHY? TODO).
     // Copy jar files into HDFS.
     // Modify JobConfs to replace local path in JobConf with HDFS path.
+    // TODO: move over additional in Shen Li's WJobConf into JobConf ???
 
   }
 
   /**
    * Utility that submits a workflow, then polls for progress until the workflow
    * is finished.
-   * 
+   *
    * @param workflow The workflow configuration.
    * @return A RunningWorkflow to be used for monitoring.
    * @throws IOException if the workflow fails.
@@ -331,7 +361,7 @@ public class WorkflowClient extends Configured {
 
   /**
    * Monitor and print status in real-time as progress is made and tasks fail.
-   * 
+   *
    * @param conf The workflow's configuration.
    * @param workflow The workflow to track.
    * @return true if the job succeeded.

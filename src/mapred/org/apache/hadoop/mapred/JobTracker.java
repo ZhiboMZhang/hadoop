@@ -77,6 +77,8 @@ import org.apache.hadoop.mapred.QueueManager.QueueACL;
 import org.apache.hadoop.mapred.TaskTrackerStatus.ResourceStatus;
 import org.apache.hadoop.mapred.TaskTrackerStatus.TaskTrackerHealthStatus;
 import org.apache.hadoop.mapred.workflow.WorkflowID;
+import org.apache.hadoop.mapred.workflow.WorkflowProfile;
+import org.apache.hadoop.mapred.workflow.WorkflowStatus;
 import org.apache.hadoop.mapred.workflow.WorkflowSubmissionProtocol;
 import org.apache.hadoop.mapreduce.ClusterMetrics;
 import org.apache.hadoop.mapreduce.TaskType;
@@ -3542,8 +3544,58 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
 
   public synchronized WorkflowID getNewWorkflowId() throws IOException {
     checkJobTrackerState();
-    WorkflowID id = new WorkflowID(getTrackerIdentifier(), nextWorkflowId++);
-    return id;
+    return new WorkflowID(getTrackerIdentifier(), nextWorkflowId++);
+  }
+
+  // TODO
+  public WorkflowProfile getWorkflowProfile(WorkflowID workflowId) {
+    return null;
+  }
+
+  public WorkflowStatus getWorkflowStatus(WorkflowID workflowId) {
+    return null;
+  }
+
+  /**
+   * Get the workflow staging area directory. This function simply calls an
+   * internal function to get the staging area directory (with elevated
+   * privileges).
+   *
+   * @return A String representing the workflow staging area directory.
+   * @throws IOException
+   */
+  public String getWorkflowStagingAreaDir() throws IOException {
+    checkSafeMode();
+
+    try {
+      final String user = UserGroupInformation.getCurrentUser().getShortUserName();
+      return getMROwner().doAs(new PrivilegedExceptionAction<String>() {
+        @Override
+        public String run() throws Exception {
+          return getWorkflowStagingAreaDirInternal(user);
+        }
+      });
+
+    } catch (InterruptedException ie) {
+      throw new IOException(ie);
+    }
+  }
+
+  // Get the workflow staging area directory.
+  private String getWorkflowStagingAreaDirInternal(String user)
+      throws IOException {
+
+    final Path workflowStagingRootDir = new Path(conf.get(
+        "mapreduce.jobtracker.staging.root.dir", "/tmp/hadoop/mapred/staging"));
+    final FileSystem fileSystem = workflowStagingRootDir.getFileSystem(conf);
+
+    return fileSystem.makeQualified(
+        new Path(workflowStagingRootDir, user + "/.staging")).toString();
+  }
+
+  public WorkflowStatus submitWorkflow(WorkflowID workflowId,
+      String workflowSubmitDir, Credentials credentials) throws IOException {
+    return null;
   }
 
   // //////////////////////////////////////////////////

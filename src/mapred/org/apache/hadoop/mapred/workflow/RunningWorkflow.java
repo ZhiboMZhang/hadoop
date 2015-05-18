@@ -46,4 +46,18 @@ public interface RunningWorkflow {
    */
   public String getFailureInfo() throws IOException;
 
+  // TODO: Maybe, hopefully.
+  // public float setupProgress() throws IOException;
+  // public float jobProgress() throws IOException;
+  // public float mapProgress() throws IOException;
+  // public float reduceProgress() throws IOException;
+  // public float cleanupProgress() throws IOException;
+
+  /**
+   * Returns a snapshot of the current workflow's status.
+   *
+   * @return The {@link WorkflowStatus} of the current workflow.
+   * @throws IOException
+   */
+  public WorkflowStatus getWorkflowStatus() throws IOException;
 }
