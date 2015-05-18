@@ -87,13 +87,10 @@ public class WorkflowConf extends Configuration {
     // Get location of workflow jar.
     Path jar = new Path(getJar());
 
-    System.out.println(jar);
-    System.out.println(new Path(jar.getParent(), jarName));
-
     // is classname in jar directory
     try {
-      boolean exists = FileSystem.getLocal(this).exists(
-          new Path(jar.getParent(), jarName));
+      Path addedJarPath = new Path(jar.getParent(), jarName);
+      boolean exists = FileSystem.getLocal(this).exists(addedJarPath);
       if (exists) {
         String jobJar = "mapred.workflow.job." + name;
         String jobParameters = "mapred.workflow.job" + name + ".parameters";
@@ -107,6 +104,7 @@ public class WorkflowConf extends Configuration {
 
   }
 
+  // TODO: check this works.
   public void addDependency(String jobName, String dependency) {
     set("mapred.workflow.job.dependency." + jobName + "." + dependency, "true");
   }

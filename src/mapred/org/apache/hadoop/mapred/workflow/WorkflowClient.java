@@ -20,6 +20,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.PrivilegedExceptionAction;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -27,15 +28,16 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.retry.RetryPolicies;
 import org.apache.hadoop.io.retry.RetryPolicy;
 import org.apache.hadoop.io.retry.RetryProxy;
 import org.apache.hadoop.io.retry.RetryUtils;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.mapred.ClusterStatus;
+import org.apache.hadoop.mapred.JobClient;
 import org.apache.hadoop.mapred.JobTracker;
 import org.apache.hadoop.mapred.JobTrackerNotYetInitializedException;
 import org.apache.hadoop.mapred.SafeModeException;
+import org.apache.hadoop.mapred.TaskTrackerStatus.ResourceStatus;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.mortbay.log.Log;
@@ -48,18 +50,30 @@ import org.mortbay.log.Log;
  */
 public class WorkflowClient extends Configured {
 
-  // TODO: These values okay?
-  public static final String MAPREDUCE_CLIENT_RETRY_POLICY_ENABLED_KEY = "mapreduce.jobclient.retry.policy.enabled";
-  public static final Boolean MAPREDUCE_CLIENT_RETRY_POLICY_ENABLED_DEFAULT = false;
-  public static final String MAPREDUCE_CLIENT_RETRY_POLICY_SPEC_KEY = "mapreduce.jobclient.retry.policy.spec";
-  public static final String MAPREDUCE_CLIENT_RETRY_POLICY_SPEC_DEFAULT = "10000,6,60000,10";
-
   /**
    * A NetworkedWorkflow is an implementation of RunningWorkflow. It holds a
    * WorkflowProfile object to provide some information, and interacts with the
    * remote service to provide certain functionality.
    */
+  // TODO
   static class NetworkedWorkflow implements RunningWorkflow {
+
+    private WorkflowSubmissionProtocol workflowSubmitClient;
+    private WorkflowStatus status;
+    private WorkflowProfile profile;
+    private long statusTime;
+
+    /**
+     * We store a {@link WorkflowProfile} and a timestamp for when we last
+     * acquired the job profile. If the job is null, then we cannot perform an
+     * of the tasks, so we throw an exception.
+     */
+    public NetworkedWorkflow(WorkflowStatus status, WorkflowProfile profile,
+        WorkflowSubmissionProtocol workflowSubmissionClient) {
+      this.status = status;
+      this.profile = profile;
+      this.workflowSubmitClient = workflowSubmissionClient;
+    }
 
     @Override
     public WorkflowID getID() {
@@ -79,6 +93,7 @@ public class WorkflowClient extends Configured {
   }
 
   private UserGroupInformation ugi;
+  private WorkflowSubmissionProtocol rpcWorkflowSubmitClient;
   private WorkflowSubmissionProtocol workflowSubmitClient;
 
   /**
@@ -104,13 +119,12 @@ public class WorkflowClient extends Configured {
     this.ugi = UserGroupInformation.getCurrentUser();
 
     if ("local".equals(tracker)) {
-      throw new IOException(
-          "Workflow execution only implemented for cluster configuration.");
+      throw new IOException("Workflow execution only implemented"
+          + " for distributed cluster configuration.");
     } else {
-      WorkflowSubmissionProtocol rpcWorkflowSubmitClient;
       rpcWorkflowSubmitClient = createRPCProxy(JobTracker.getAddress(conf),
           conf);
-      this.workflowSubmitClient = createProxy(rpcWorkflowSubmitClient, conf);
+      workflowSubmitClient = createProxy(rpcWorkflowSubmitClient, conf);
     }
   }
 
@@ -132,10 +146,10 @@ public class WorkflowClient extends Configured {
             0,
             RetryUtils.getMultipleLinearRandomRetry(
                 conf,
-                MAPREDUCE_CLIENT_RETRY_POLICY_ENABLED_KEY,
-                MAPREDUCE_CLIENT_RETRY_POLICY_ENABLED_DEFAULT,
-                MAPREDUCE_CLIENT_RETRY_POLICY_SPEC_KEY,
-                MAPREDUCE_CLIENT_RETRY_POLICY_SPEC_DEFAULT),
+                JobClient.MAPREDUCE_CLIENT_RETRY_POLICY_ENABLED_KEY,
+                JobClient.MAPREDUCE_CLIENT_RETRY_POLICY_ENABLED_DEFAULT,
+                JobClient.MAPREDUCE_CLIENT_RETRY_POLICY_SPEC_KEY,
+                JobClient.MAPREDUCE_CLIENT_RETRY_POLICY_SPEC_DEFAULT),
             false);
     //@formatter:on
 
@@ -157,29 +171,19 @@ public class WorkflowClient extends Configured {
     @SuppressWarnings("unchecked")
     RetryPolicy defaultPolicy = RetryUtils.getDefaultRetryPolicy(
         conf,
-        MAPREDUCE_CLIENT_RETRY_POLICY_ENABLED_KEY,
-        MAPREDUCE_CLIENT_RETRY_POLICY_ENABLED_DEFAULT,
-        MAPREDUCE_CLIENT_RETRY_POLICY_SPEC_KEY,
-        MAPREDUCE_CLIENT_RETRY_POLICY_SPEC_DEFAULT,
+        JobClient.MAPREDUCE_CLIENT_RETRY_POLICY_ENABLED_KEY,
+        JobClient.MAPREDUCE_CLIENT_RETRY_POLICY_ENABLED_DEFAULT,
+        JobClient.MAPREDUCE_CLIENT_RETRY_POLICY_SPEC_KEY,
+        JobClient.MAPREDUCE_CLIENT_RETRY_POLICY_SPEC_DEFAULT,
         JobTrackerNotYetInitializedException.class,
         SafeModeException.class);
 
-    /*
-     * Method-specific retry policies for killJob and killTask: there are no
-     * retries on any exception including ConnectonException and
-     * SafeModeException.
-     */
-    // TODO: is this right?
-    Map<String, RetryPolicy> methodToPolicy= new HashMap<String, RetryPolicy>();
-    methodToPolicy.put("killJob", RetryPolicies.TRY_ONCE_THEN_FAIL);
-    methodToPolicy.put("killTask", RetryPolicies.TRY_ONCE_THEN_FAIL);
-    
     final WorkflowSubmissionProtocol workflowSubmissionProtocol =
         (WorkflowSubmissionProtocol) RetryProxy.create(
             WorkflowSubmissionProtocol.class,
             rpcWorkflowSubmitClient,
             defaultPolicy,
-            methodToPolicy);
+            new HashMap<String, RetryPolicy>());
     //@formatter:on
 
     RPC.checkVersion(WorkflowSubmissionProtocol.class,
@@ -229,20 +233,35 @@ public class WorkflowClient extends Configured {
         WorkflowConf workflowCopy = workflow;
 
         // Set up the workflow staging area.
-        Path stagingArea = WorkflowSubmissionFiles.getStagingDir(
-            WorkflowClient.this, workflowCopy);
+        // Path stagingArea = WorkflowSubmissionFiles.getStagingDir(
+        // WorkflowClient.this, workflowCopy);
         WorkflowID workflowId = workflowSubmitClient.getNewWorkflowId();
-        Path submitWorkflowDir = new Path(stagingArea, workflowId.toString());
-        workflowCopy.set("mapreduce.workflow.dir", submitWorkflowDir.toString());
+        // Path submitWorkflowDir = new Path(stagingArea,
+        // workflowId.toString());
+        // workflowCopy.set("mapreduce.workflow.dir",
+        // submitWorkflowDir.toString());
 
         // Generate the scheduling plan.
         WorkflowStatus status = null;
+
+        // Get cluster status information from the JobTracker.
         ClusterStatus clusterStatus = workflowSubmitClient
             .getClusterStatus(true);
+        Collection<String> activeTrackers = clusterStatus
+            .getActiveTrackerNames();
+        Map<String, ResourceStatus> trackerInfo = clusterStatus
+            .getTrackerInfo();
 
-        // here we need to call JobTracker for cluster status information?
+        for (String tracker : activeTrackers) {
+          ResourceStatus resourceStatus = trackerInfo.get(tracker);
+          if (resourceStatus == null) {
+            System.out.println("The tracker " + tracker + " has no resources?");
+          } else {
+            System.out.println("The tracker " + tracker + " has resources:");
+          }
+        }
 
-        copyAndConfigureFiles(workflowCopy, submitWorkflowDir);
+        // copyAndConfigureFiles(workflowCopy, submitWorkflowDir);
         // Submit the workflow... ?
         // need to figure out also how to generate job conf / jobs from
         // the workflow conf, and how later to know to assigned their tasks
@@ -251,7 +270,7 @@ public class WorkflowClient extends Configured {
         // Submit the Submitter job.
 
         // Clean up if things go wrong.
-        return null;
+        return new NetworkedWorkflow(null, null, null);
       }
     });
   }
@@ -280,7 +299,6 @@ public class WorkflowClient extends Configured {
     // Write the WorkflowConf into a file (WHY? TODO).
     // Copy jar files into HDFS.
     // Modify JobConfs to replace local path in JobConf with HDFS path.
-    // TODO: move over additional in Shen Li's WJobConf into JobConf ???
 
   }
 

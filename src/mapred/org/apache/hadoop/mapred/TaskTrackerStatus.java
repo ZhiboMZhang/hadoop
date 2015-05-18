@@ -17,13 +17,20 @@
  */
 package org.apache.hadoop.mapred;
 
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.io.*;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.io.WritableFactories;
+import org.apache.hadoop.io.WritableFactory;
+import org.apache.hadoop.io.WritableUtils;
 import org.apache.hadoop.mapred.TaskStatus.State;
-
-import java.io.*;
-import java.util.*;
 
 /**************************************************
  * A TaskTrackerStatus is a MapReduce primitive.  Keeps
@@ -50,24 +57,25 @@ public class TaskTrackerStatus implements Writable {
   int taskFailures;
   int dirFailures;
   List<TaskStatus> taskReports;
-    
+
   volatile long lastSeen;
   private int maxMapTasks;
   private int maxReduceTasks;
   private TaskTrackerHealthStatus healthStatus;
-   
+
   public static final int UNAVAILABLE = -1;
+
   /**
    * Class representing a collection of resources on this tasktracker.
    */
-  static class ResourceStatus implements Writable {
-    
+  public static class ResourceStatus implements Writable {
+
     private long totalVirtualMemory;
     private long totalPhysicalMemory;
     private long mapSlotMemorySizeOnTT;
     private long reduceSlotMemorySizeOnTT;
     private long availableSpace;
-    
+
     private long availableVirtualMemory = UNAVAILABLE; // in byte
     private long availablePhysicalMemory = UNAVAILABLE; // in byte
     private int numProcessors = UNAVAILABLE;
@@ -122,7 +130,7 @@ public class TaskTrackerStatus implements Writable {
      * 
      * @return maximum amount of physical memory on the tasktracker in bytes.
      */
-    long getTotalPhysicalMemory() {
+    public long getTotalPhysicalMemory() {
       return totalPhysicalMemory;
     }
 
@@ -177,8 +185,8 @@ public class TaskTrackerStatus implements Writable {
     /**
      * Will return LONG_MAX if space hasn't been measured yet.
      * @return bytes of available local disk space on this tasktracker.
-     */    
-    long getAvailableSpace() {
+     */
+    public long getAvailableSpace() {
       return availableSpace;
     }
 

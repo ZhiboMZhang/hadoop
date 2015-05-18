@@ -23,10 +23,13 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
+import org.apache.hadoop.mapred.TaskTrackerStatus.ResourceStatus;
 
 /**
  * Status information on the current state of the Map-Reduce cluster.
@@ -57,10 +60,12 @@ import org.apache.hadoop.io.WritableUtils;
  */
 public class ClusterStatus implements Writable {
 
-  private int numActiveTrackers;
+  private Map<String, ResourceStatus> trackerInfo = new HashMap<String, ResourceStatus>();
   private Collection<String> activeTrackers = new ArrayList<String>();
   private Collection<String> blacklistedTrackers = new ArrayList<String>();
   private Collection<String> graylistedTrackers = new ArrayList<String>();
+  private int numTrackerInfo = 0;
+  private int numActiveTrackers;
   private int numBlacklistedTrackers;
   private int numGraylistedTrackers;
   private int numExcludedNodes;
@@ -207,8 +212,50 @@ public class ClusterStatus implements Writable {
   }
 
   /**
-   * Get the number of active task trackers in the cluster.  Includes
-   * graylisted but not blacklisted trackers.
+   * Construct a new cluster status.
+   * 
+   * @param activeTrackers active tasktrackers in the cluster (includes gray)
+   * @param blacklistedTrackers blacklisted tasktrackers in the cluster
+   * @param graylistedTrackers graylisted tasktrackers in the cluster
+   * @param ttExpiryInterval the tasktracker expiry interval
+   * @param maps no. of currently running map-tasks in the cluster
+   * @param reduces no. of currently running reduce-tasks in the cluster
+   * @param maxMaps the maximum no. of map tasks in the cluster
+   * @param maxReduces the maximum no. of reduce tasks in the cluster
+   * @param state the {@link JobTracker.State} of the <code>JobTracker</code>
+   * @param numDecommissionNodes number of decommission trackers
+   * @param trackerInfo Task tracker information.
+   */
+  ClusterStatus(Collection<String> activeTrackers,
+      Collection<String> blacklistedTrackers,
+      Collection<String> graylistedTrackers, long ttExpiryInterval, int maps,
+      int reduces, int maxMaps, int maxReduces, JobTracker.State state,
+      int numDecommissionNodes, Map<String, ResourceStatus> trackerInfo) {
+
+    this(activeTrackers.size(), blacklistedTrackers.size(), graylistedTrackers
+        .size(), ttExpiryInterval, maps, reduces, maxMaps, maxReduces, state,
+        numDecommissionNodes, Runtime.getRuntime().totalMemory(), Runtime
+            .getRuntime().maxMemory());
+    System.out.println("in clusterstatus constructor");
+
+    this.activeTrackers = activeTrackers;
+    this.blacklistedTrackers = blacklistedTrackers;
+    this.graylistedTrackers = graylistedTrackers;
+
+    this.trackerInfo = trackerInfo;
+    this.numTrackerInfo = trackerInfo.size();
+  }
+
+  /**
+   * Get the resource information of the task trackers.
+   */
+  public Map<String, ResourceStatus> getTrackerInfo() {
+    return trackerInfo;
+  }
+
+  /**
+   * Get the number of active task trackers in the cluster. Includes graylisted
+   * but not blacklisted trackers.
    *
    * @return the number of active task trackers in the cluster.
    */
@@ -345,6 +392,20 @@ public class ClusterStatus implements Writable {
   }
 
   public void write(DataOutput out) throws IOException {
+    // Write out tracker information first.
+    if (trackerInfo.size() == 0) {
+      out.writeInt(numTrackerInfo);
+      out.writeInt(0);
+    } else {
+      out.writeInt(trackerInfo.size());
+      out.writeInt(trackerInfo.size());
+      for (String tracker : trackerInfo.keySet()) {
+        Text.writeString(out, tracker);
+        trackerInfo.get(tracker).write(out);
+      }
+    }
+
+    // Write out other information.
     if (activeTrackers.size() == 0) {
       out.writeInt(numActiveTrackers);
       out.writeInt(0);
@@ -387,6 +448,19 @@ public class ClusterStatus implements Writable {
   }
 
   public void readFields(DataInput in) throws IOException {
+    // Read in tracker information first.
+    numTrackerInfo = in.readInt();
+    int numTrackerInfo = in.readInt();
+    if (numTrackerInfo > 0) {
+      for (int i = 0; i < numTrackerInfo; i++) {
+        String tracker = Text.readString(in);
+        ResourceStatus resourceStatus = new ResourceStatus();
+        resourceStatus.readFields(in);
+        trackerInfo.put(tracker, resourceStatus);
+      }
+    }
+
+    // Read in other information.
     numActiveTrackers = in.readInt();
     int numTrackerNames = in.readInt();
     if (numTrackerNames > 0) {

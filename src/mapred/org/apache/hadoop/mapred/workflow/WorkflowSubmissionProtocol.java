@@ -42,10 +42,12 @@ public interface WorkflowSubmissionProtocol extends VersionedProtocol {
   /**
    * Get the current status of the cluster.
    * 
-   * @param If true, return a detailed report containing everything.
+   * @param If true, return a detailed report containing EVERYTHING. For each
+   *          node (tasktracker), we require the memory, disk space, CPU speed,
+   *          & number of cores.
+   * 
    * @return A summary of the state of the cluster.
    */
-  // TODO
   public ClusterStatus getClusterStatus(boolean detailed);
 
 }

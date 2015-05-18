@@ -53,8 +53,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
@@ -71,12 +71,13 @@ import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.ipc.RPC.VersionMismatch;
 import org.apache.hadoop.ipc.Server;
 import org.apache.hadoop.mapred.AuditLogger.Constants;
-import org.apache.hadoop.mapred.JobHistory.Keys;
-import org.apache.hadoop.mapred.JobHistory.Values;
 import org.apache.hadoop.mapred.JobInProgress.KillInterruptedException;
 import org.apache.hadoop.mapred.JobStatusChangeEvent.EventType;
 import org.apache.hadoop.mapred.QueueManager.QueueACL;
+import org.apache.hadoop.mapred.TaskTrackerStatus.ResourceStatus;
 import org.apache.hadoop.mapred.TaskTrackerStatus.TaskTrackerHealthStatus;
+import org.apache.hadoop.mapred.workflow.WorkflowID;
+import org.apache.hadoop.mapred.workflow.WorkflowSubmissionProtocol;
 import org.apache.hadoop.mapreduce.ClusterMetrics;
 import org.apache.hadoop.mapreduce.TaskType;
 import org.apache.hadoop.mapreduce.security.TokenCache;
@@ -121,9 +122,9 @@ import org.mortbay.util.ajax.JSON;
  *
  *******************************************************/
 public class JobTracker implements MRConstants, InterTrackerProtocol,
-    JobSubmissionProtocol, TaskTrackerManager, RefreshUserMappingsProtocol,
-    RefreshAuthorizationPolicyProtocol, AdminOperationsProtocol,
-    JobTrackerMXBean {
+    JobSubmissionProtocol, WorkflowSubmissionProtocol, TaskTrackerManager,
+    RefreshUserMappingsProtocol, RefreshAuthorizationPolicyProtocol,
+    AdminOperationsProtocol, JobTrackerMXBean {
 
   static{
     Configuration.addDefaultResource("mapred-default.xml");
@@ -270,6 +271,7 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
   static final int MIN_TIME_BEFORE_RETIRE = 0;
 
   private int nextJobId = 1;
+  private int nextWorkflowId = 1;
 
   public static final Log LOG = LogFactory.getLog(JobTracker.class);
 
@@ -366,6 +368,8 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
       return AdminOperationsProtocol.versionID;
     } else if (protocol.equals(RefreshUserMappingsProtocol.class.getName())){
       return RefreshUserMappingsProtocol.versionID;
+    } else if (protocol.equals(WorkflowSubmissionProtocol.class.getName())) {
+      return WorkflowSubmissionProtocol.versionID;
     } else {
       throw new IOException("Unknown protocol to job tracker: " + protocol);
     }
@@ -3153,6 +3157,7 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
         }
       }
     }
+    // Add a newly seen taskTracker.
     if (status != null) {
       totalMaps += status.countMapTasks();
       totalReduces += status.countReduceTasks();
@@ -3173,7 +3178,7 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
       if (taskTracker != null) {
         alreadyPresent = true;
       } else {
-        taskTracker = new TaskTracker(trackerName);
+        taskTracker = new TaskTracker(trackerName, status.getResourceStatus());
       }
       
       taskTracker.setStatus(status);
@@ -3531,9 +3536,19 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
     return jobid.substring(4);
   }
 
-  ////////////////////////////////////////////////////
+  // //////////////////////////////////////////////////
+  // WorkflowSubmissionProtocol
+  // //////////////////////////////////////////////////
+
+  public synchronized WorkflowID getNewWorkflowId() throws IOException {
+    checkJobTrackerState();
+    WorkflowID id = new WorkflowID(getTrackerIdentifier(), nextWorkflowId++);
+    return id;
+  }
+
+  // //////////////////////////////////////////////////
   // JobSubmissionProtocol
-  ////////////////////////////////////////////////////
+  // //////////////////////////////////////////////////
 
   /**
    * Allocates a new JobId string.
@@ -3745,17 +3760,21 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
   public synchronized ClusterStatus getClusterStatus(boolean detailed) {
     synchronized (taskTrackers) {
       if (detailed) {
+
+        // Collect the task tracker hardware information.
         List<List<String>> trackerNames = taskTrackerNames();
-        return new ClusterStatus(trackerNames.get(0),
-            trackerNames.get(1),
-            trackerNames.get(2),
-            TASKTRACKER_EXPIRY_INTERVAL,
-            totalMaps,
-            totalReduces,
-            totalMapTaskCapacity,
-            totalReduceTaskCapacity, 
-            state, getExcludedNodes().size()
-            );
+        List<String> activeTrackerNames = trackerNames.get(0);
+        HashMap<String, ResourceStatus> trackerInfo = new HashMap<String, ResourceStatus>();
+
+        for (String name : activeTrackerNames) {
+          trackerInfo.put(name, taskTrackers.get(name).getResources());
+        }
+
+        return new ClusterStatus(activeTrackerNames, trackerNames.get(1),
+            trackerNames.get(2), TASKTRACKER_EXPIRY_INTERVAL, totalMaps,
+            totalReduces, totalMapTaskCapacity, totalReduceTaskCapacity, state,
+            getExcludedNodes().size(), trackerInfo);
+
       } else {
         return new ClusterStatus(
             // active trackers include graylisted but not blacklisted ones:

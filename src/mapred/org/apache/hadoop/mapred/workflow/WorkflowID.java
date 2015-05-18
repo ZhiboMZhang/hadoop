@@ -44,7 +44,17 @@ public class WorkflowID extends org.apache.hadoop.mapred.ID implements
    */
   public WorkflowID(String jtIdentifier, int id) {
     super(id);
+    System.out.println("In WorkflowID(S, int) constructor");
     this.jtIdentifier = new Text(jtIdentifier);
+  }
+
+  /**
+   * Construct a WorkflowID object.
+   * 
+   * This constructor is called via reflection (somewhere) in the code.
+   */
+  public WorkflowID() {
+    jtIdentifier = new Text();
   }
 
   public String getJtIdentifier() {

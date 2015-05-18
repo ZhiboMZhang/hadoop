@@ -85,6 +85,7 @@ import org.apache.hadoop.mapred.CleanupQueue.PathDeletionContext;
 import org.apache.hadoop.mapred.TaskLog.LogFileDetail;
 import org.apache.hadoop.mapred.TaskLog.LogName;
 import org.apache.hadoop.mapred.TaskStatus.Phase;
+import org.apache.hadoop.mapred.TaskTrackerStatus.ResourceStatus;
 import org.apache.hadoop.mapred.TaskTrackerStatus.TaskTrackerHealthStatus;
 import org.apache.hadoop.mapred.pipes.Submitter;
 import org.apache.hadoop.mapreduce.TaskType;
@@ -1937,7 +1938,32 @@ public class TaskTracker implements MRConstants, TaskUmbilicalProtocol,
   }
 
   /**
+   * Set {@link ResourceStatus} information on a given TaskTrackerStatus object.
+   * 
+   * @param taskTrackerStatus The taskTrackerStatus.
+   * @throws IOException
+   */
+  private void updateMachineStats(TaskTrackerStatus taskTrackerStatus)
+      throws IOException {
+
+    ResourceStatus status = taskTrackerStatus.getResourceStatus();
+
+    status.setAvailableSpace(getFreeSpace());
+    status.setTotalVirtualMemory(getTotalVirtualMemoryOnTT());
+    status.setTotalPhysicalMemory(getTotalPhysicalMemoryOnTT());
+    status.setMapSlotMemorySizeOnTT(mapSlotMemorySizeOnTT);
+    status.setReduceSlotMemorySizeOnTT(reduceSlotSizeMemoryOnTT);
+    status.setAvailableVirtualMemory(getAvailableVirtualMemoryOnTT());
+    status.setAvailablePhysicalMemory(getAvailablePhysicalMemoryOnTT());
+    status.setCumulativeCpuTime(getCumulativeCpuTimeOnTT());
+    status.setCpuFrequency(getCpuFrequencyOnTT());
+    status.setNumProcessors(getNumProcessorsOnTT());
+    status.setCpuUsage(getCpuUsageOnTT());
+  }
+
+  /**
    * Build and transmit the heart beat to the JobTracker
+   * 
    * @param now current time
    * @return false if the tracker was unknown
    * @throws IOException
@@ -1960,14 +1986,13 @@ public class TaskTracker implements MRConstants, TaskUmbilicalProtocol,
     //
     if (status == null) {
       synchronized (this) {
-        status = new TaskTrackerStatus(taskTrackerName, localHostname, 
-                                       httpPort, 
-                                       cloneAndResetRunningTaskStatuses(
-                                         sendCounters), 
-                                       taskFailures,
-                                       localStorage.numFailures(),
-                                       maxMapSlots,
-                                       maxReduceSlots); 
+        status = new TaskTrackerStatus(taskTrackerName, localHostname,
+            httpPort, cloneAndResetRunningTaskStatuses(sendCounters),
+            taskFailures, localStorage.numFailures(), maxMapSlots,
+            maxReduceSlots);
+
+        // Populate machine hardware information when creating a new status.
+        updateMachineStats(status);
       }
     } else {
       LOG.info("Resending 'status' to '" + jobTrackAddr.getHostName() +
@@ -1988,32 +2013,12 @@ public class TaskTracker implements MRConstants, TaskUmbilicalProtocol,
     }
     if (askForNewTask) {
       askForNewTask = enoughFreeSpace(localMinSpaceStart);
-      long freeDiskSpace = getFreeSpace();
-      long totVmem = getTotalVirtualMemoryOnTT();
-      long totPmem = getTotalPhysicalMemoryOnTT();
-      long availableVmem = getAvailableVirtualMemoryOnTT();
-      long availablePmem = getAvailablePhysicalMemoryOnTT();
-      long cumuCpuTime = getCumulativeCpuTimeOnTT();
-      long cpuFreq = getCpuFrequencyOnTT();
-      int numCpu = getNumProcessorsOnTT();
-      float cpuUsage = getCpuUsageOnTT();
 
-      status.getResourceStatus().setAvailableSpace(freeDiskSpace);
-      status.getResourceStatus().setTotalVirtualMemory(totVmem);
-      status.getResourceStatus().setTotalPhysicalMemory(totPmem);
-      status.getResourceStatus().setMapSlotMemorySizeOnTT(
-          mapSlotMemorySizeOnTT);
-      status.getResourceStatus().setReduceSlotMemorySizeOnTT(
-          reduceSlotSizeMemoryOnTT);
-      status.getResourceStatus().setAvailableVirtualMemory(availableVmem); 
-      status.getResourceStatus().setAvailablePhysicalMemory(availablePmem);
-      status.getResourceStatus().setCumulativeCpuTime(cumuCpuTime);
-      status.getResourceStatus().setCpuFrequency(cpuFreq);
-      status.getResourceStatus().setNumProcessors(numCpu);
-      status.getResourceStatus().setCpuUsage(cpuUsage);
+      // Update hardware information when a new task can be scheduled.
+      updateMachineStats(status);
     }
-    //add node health information
-    
+
+    // add node health information
     TaskTrackerHealthStatus healthStatus = status.getHealthStatus();
     synchronized (this) {
       if (healthChecker != null) {
