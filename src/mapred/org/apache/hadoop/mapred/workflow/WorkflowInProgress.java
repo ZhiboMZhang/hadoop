@@ -41,4 +41,12 @@ public class WorkflowInProgress {
   private WorkflowProfile profile;
   private WorkflowStatus status;
 
+  public WorkflowStatus getStatus() {
+    return status;
+  }
+
+  public WorkflowProfile getProfile() {
+    return profile;
+  }
+
 }

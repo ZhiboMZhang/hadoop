@@ -18,12 +18,14 @@ package org.apache.hadoop.mapred.workflow;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.util.ClassUtil;
 
 public class WorkflowConf extends Configuration {
@@ -44,58 +46,72 @@ public class WorkflowConf extends Configuration {
     }
   }
 
-  private class JobInfo {
+  public class JobInfo {
     public JobConf jobConf;
     public String parameters;
   }
 
-  private Credentials credentials = new Credentials();
-  private HashMap<String, JobInfo> workflowJobs;
-
-  // TODO: locate jars from class names
-  // TODO: determine first and last job to set up in & out paths
-  // TODO: parameters?
-  public WorkflowConf(Configuration conf) {
-    super(conf);
-
-    if (conf instanceof WorkflowConf) {
-      WorkflowConf that = (WorkflowConf) conf;
-      credentials = that.credentials;
-    }
-  }
-
-  public WorkflowConf(Configuration conf, Class<?> exampleClass) {
-    this(conf);
-    setJarByClass(exampleClass);
-  }
+  private SchedulingPlan scheduler;
+  private HashMap<String, JobInfo> jobs;
+  private Map<String, Set<String>> dependencies;
 
   public WorkflowConf(Class<?> exampleClass) {
+    this.dependencies = new HashMap<String, Set<String>>();
     setJarByClass(exampleClass);
+  }
+
+  /**
+   * Generate a scheduling plan for the WorklfowConf, given constraints and any
+   * additional information.
+   * 
+   * @return TODO
+   */
+  public boolean generatePlan() {
+    // TODO
+    initJobs();
+    return scheduler.generatePlan(this);
+  }
+
+  /**
+   * Set up addition properties in the workflow job's JobConf objects.
+   */
+  private void initJobs() {
+    // TODO: Mainly, need to deal with input/output paths + temporary paths.
+    // TODO: parse parameters to get main class, set in JobConfs. ?
+    // TODO: determine first and last job to set up in & out paths
+
+    for (String name : jobs.keySet()) {
+      JobInfo job = jobs.get(name);
+    }
   }
 
   /**
    * Add a map-reduce job to the list of jobs to be executed in the workflow.
    * Each job is identified by a name, and includes a jar file and parameters.
    * 
-   * TODO: currently, jobs are assumed to have their jar files located in the
-   * same directory as the workflow job jar file.
+   * Job jar files are assumed to be located in the same directory as the
+   * Workflow jar file.
    * 
-   * @param name The name of the job to be executed. Used for identification.
+   * @param name A unique identifier for the job to be executed.
    * @param jarName The path to the jar file belonging to the job.
    */
   public void addJob(String name, String jarName, String parameters) {
     // Get location of workflow jar.
     Path jar = new Path(getJar());
 
-    // is classname in jar directory
     try {
       Path addedJarPath = new Path(jar.getParent(), jarName);
       boolean exists = FileSystem.getLocal(this).exists(addedJarPath);
       if (exists) {
-        String jobJar = "mapred.workflow.job." + name;
-        String jobParameters = "mapred.workflow.job" + name + ".parameters";
-        set(jobJar, jarName);
-        set(jobParameters, parameters);
+        // Store contained jobs in JobInfo class as opposed to attributes.
+        JobInfo job = new JobInfo();
+        job.parameters = parameters;
+        job.jobConf = new JobConf();
+        job.jobConf.setJar(jarName);
+
+        jobs.put(name, job);
+      } else {
+        // Throw exception, misconfigured job.
       }
 
     } catch (Exception e) {
@@ -104,9 +120,19 @@ public class WorkflowConf extends Configuration {
 
   }
 
-  // TODO: check this works.
-  public void addDependency(String jobName, String dependency) {
-    set("mapred.workflow.job.dependency." + jobName + "." + dependency, "true");
+  /**
+   * Add a dependency to a job.
+   *
+   * @param successor A unique job name.
+   * @param predecessor A unique job name.
+   */
+  public void addDependency(String successor, String predecessor) {
+    Set<String> dependencies = this.dependencies.get(successor);
+    if (dependencies == null) {
+      dependencies = new HashSet<String>();
+      this.dependencies.put(successor, dependencies);
+    }
+    dependencies.add(predecessor);
   }
 
   /**

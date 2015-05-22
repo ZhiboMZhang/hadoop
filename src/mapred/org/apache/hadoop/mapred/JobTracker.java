@@ -77,6 +77,7 @@ import org.apache.hadoop.mapred.QueueManager.QueueACL;
 import org.apache.hadoop.mapred.TaskTrackerStatus.ResourceStatus;
 import org.apache.hadoop.mapred.TaskTrackerStatus.TaskTrackerHealthStatus;
 import org.apache.hadoop.mapred.workflow.WorkflowID;
+import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
 import org.apache.hadoop.mapred.workflow.WorkflowProfile;
 import org.apache.hadoop.mapred.workflow.WorkflowStatus;
 import org.apache.hadoop.mapred.workflow.WorkflowSubmissionProtocol;
@@ -1540,6 +1541,10 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
   // All the known jobs.  (jobid->JobInProgress)
   Map<JobID, JobInProgress> jobs =  
     Collections.synchronizedMap(new TreeMap<JobID, JobInProgress>());
+
+  // All the known workflows. (workflowId -> WorkflowInProgress)
+  Map<WorkflowID, WorkflowInProgress> workflows = Collections
+      .synchronizedMap(new TreeMap<WorkflowID, WorkflowInProgress>());
 
   // (user -> list of JobInProgress)
   TreeMap<String, ArrayList<JobInProgress>> userToJobsMap =
@@ -3547,13 +3552,48 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
     return new WorkflowID(getTrackerIdentifier(), nextWorkflowId++);
   }
 
-  // TODO
-  public WorkflowProfile getWorkflowProfile(WorkflowID workflowId) {
-    return null;
+  /**
+   * Return the {@link WorkflowProfile} of the Workflow with the given
+   * {@link WorkflowID}.
+   */
+  public WorkflowProfile getWorkflowProfile(WorkflowID workflowId)
+      throws IOException {
+    checkJobTrackerState();
+
+    synchronized (this) {
+      WorkflowInProgress workflow = workflows.get(workflowId);
+      if (workflow != null) {
+        return workflow.getProfile();
+      } else {
+        // TODO: RetireWorkflowInfo / completedWorkflowStatusStore
+        return null;
+      }
+    }
   }
 
-  public WorkflowStatus getWorkflowStatus(WorkflowID workflowId) {
-    return null;
+  /**
+   * Return the {@link WorkflowStatus} of the workflow with the given
+   * {@link WorkflowID}.
+   */
+  public WorkflowStatus getWorkflowStatus(WorkflowID workflowId)
+      throws IOException {
+    checkJobTrackerState();
+
+    if (workflowId == null) {
+      LOG.warn("JobTracker.getWorkflowStatus();"
+          + " cannot get status for null workflowId);");
+      return null;
+    }
+
+    synchronized (this) {
+      WorkflowInProgress workflow = workflows.get(workflowId);
+      if (workflow != null) {
+        return workflow.getStatus();
+      } else {
+        // TODO: RetireWorkflowInfo / completedWorkflowStatusStore.
+        return null;
+      }
+    }
   }
 
   /**
