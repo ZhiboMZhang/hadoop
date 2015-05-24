@@ -55,7 +55,6 @@ public class WorkflowClient extends Configured {
    * WorkflowProfile object to provide some information, and interacts with the
    * remote service to provide certain functionality.
    */
-  // TODO
   static class NetworkedWorkflow implements RunningWorkflow {
 
     private WorkflowSubmissionProtocol workflowSubmitClient;
@@ -266,11 +265,11 @@ public class WorkflowClient extends Configured {
         // Generate the scheduling plan.
         // TODO
         // what? need ->
-        // constraint info, (check, in workflowconf) (Check this works TODO)
-        // machine type w/ rate (check, got it)
-        // actual machines in cluster w/ hardware info
-        // - kind of, need number of slots I think?
-        // job info's (in workflowconf?)
+        // constraint info, (yes, in workflowconf)
+        // machine type w/ rate (yes, from xml file)
+        // machines in cluster w/ hardware & slot info (yes, from ClusterStatus)
+
+        // job information from workflow conf (internal) (in workflowconf?)
         // - dag/dependencies
         // - map/red # of slots
 

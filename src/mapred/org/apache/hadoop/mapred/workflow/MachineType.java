@@ -40,7 +40,7 @@ public class MachineType {
 
   private String name;
   private long totalPhysicalMemory;  // in bytes.
-  private long availableSpace;  // in bytes?
+  private long availableSpace;  // in bytes.
   private int numProcessors;
   private float cpuFrequency;  // in kHz.
   private float chargeRate;  // in $/hour.
@@ -78,7 +78,6 @@ public class MachineType {
 
     int multiplier = 1;
 
-    // TODO: should these be 1000 instead?
     if (text.toLowerCase().endsWith("gb")) {
       multiplier = 1024 * 1024 * 1024;
       text = text.substring(0, text.length() - "gb".length());
@@ -88,11 +87,23 @@ public class MachineType {
       text = text.substring(0, text.length() - "mb".length());
     }
 
-    totalPhysicalMemory = Long.parseLong(text, 10) * multiplier;
+    totalPhysicalMemory = (long) (Float.parseFloat(text) * multiplier);
   }
 
   private void setAvailableSpace(String text) {
-    availableSpace = Long.parseLong(text, 10);
+
+    int multiplier = 1;
+
+    if (text.toLowerCase().endsWith("gb")) {
+      multiplier = 1024 * 1024 * 1024;
+      text = text.substring(0, text.length() - "gb".length());
+
+    } else if (text.toLowerCase().endsWith("mb")) {
+      multiplier = 1024 * 1024;
+      text = text.substring(0, text.length() - "mb".length());
+    }
+
+    availableSpace = (long) (Float.parseFloat(text) * multiplier);
   }
 
   private void setNumProcessors(String text) {

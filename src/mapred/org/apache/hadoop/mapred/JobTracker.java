@@ -74,7 +74,6 @@ import org.apache.hadoop.mapred.AuditLogger.Constants;
 import org.apache.hadoop.mapred.JobInProgress.KillInterruptedException;
 import org.apache.hadoop.mapred.JobStatusChangeEvent.EventType;
 import org.apache.hadoop.mapred.QueueManager.QueueACL;
-import org.apache.hadoop.mapred.TaskTrackerStatus.ResourceStatus;
 import org.apache.hadoop.mapred.TaskTrackerStatus.TaskTrackerHealthStatus;
 import org.apache.hadoop.mapred.workflow.WorkflowID;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
@@ -3185,7 +3184,7 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
       if (taskTracker != null) {
         alreadyPresent = true;
       } else {
-        taskTracker = new TaskTracker(trackerName, status.getResourceStatus());
+        taskTracker = new TaskTracker(trackerName);
       }
       
       taskTracker.setStatus(status);
@@ -3859,7 +3858,7 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
         HashMap<String, ResourceStatus> trackerInfo = new HashMap<String, ResourceStatus>();
 
         for (String name : activeTrackerNames) {
-          trackerInfo.put(name, taskTrackers.get(name).getResources());
+          trackerInfo.put(name, taskTrackers.get(name).getResourceStatus());
         }
 
         return new ClusterStatus(activeTrackerNames, trackerNames.get(1),

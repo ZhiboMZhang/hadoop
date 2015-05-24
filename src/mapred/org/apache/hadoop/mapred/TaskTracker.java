@@ -38,11 +38,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.Vector;
-import java.util.Map.Entry;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -61,8 +61,6 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.filecache.TaskDistributedCacheManager;
 import org.apache.hadoop.filecache.TrackerDistributedCacheManager;
-import org.apache.hadoop.mapreduce.server.tasktracker.*;
-import org.apache.hadoop.mapreduce.server.tasktracker.userlogs.*;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.fs.DF;
 import org.apache.hadoop.fs.FileStatus;
@@ -85,34 +83,39 @@ import org.apache.hadoop.mapred.CleanupQueue.PathDeletionContext;
 import org.apache.hadoop.mapred.TaskLog.LogFileDetail;
 import org.apache.hadoop.mapred.TaskLog.LogName;
 import org.apache.hadoop.mapred.TaskStatus.Phase;
-import org.apache.hadoop.mapred.TaskTrackerStatus.ResourceStatus;
 import org.apache.hadoop.mapred.TaskTrackerStatus.TaskTrackerHealthStatus;
 import org.apache.hadoop.mapred.pipes.Submitter;
 import org.apache.hadoop.mapreduce.TaskType;
 import org.apache.hadoop.mapreduce.security.SecureShuffleUtils;
+import org.apache.hadoop.mapreduce.security.TokenCache;
 import org.apache.hadoop.mapreduce.security.token.JobTokenIdentifier;
 import org.apache.hadoop.mapreduce.security.token.JobTokenSecretManager;
+import org.apache.hadoop.mapreduce.server.tasktracker.JVMInfo;
+import org.apache.hadoop.mapreduce.server.tasktracker.Localizer;
+import org.apache.hadoop.mapreduce.server.tasktracker.userlogs.JobCompletedEvent;
+import org.apache.hadoop.mapreduce.server.tasktracker.userlogs.JobStartedEvent;
+import org.apache.hadoop.mapreduce.server.tasktracker.userlogs.JvmFinishedEvent;
+import org.apache.hadoop.mapreduce.server.tasktracker.userlogs.UserLogManager;
+import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
+import org.apache.hadoop.metrics2.util.MBeans;
 import org.apache.hadoop.net.DNS;
 import org.apache.hadoop.net.NetUtils;
+import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.authorize.PolicyProvider;
 import org.apache.hadoop.security.authorize.ServiceAuthorizationManager;
-import org.apache.hadoop.util.DiskChecker;
-import org.apache.hadoop.util.MemoryCalculatorPlugin;
-import org.apache.hadoop.util.ResourceCalculatorPlugin;
-import org.apache.hadoop.util.ProcfsBasedProcessTree;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
+import org.apache.hadoop.util.DiskChecker;
+import org.apache.hadoop.util.DiskChecker.DiskErrorException;
+import org.apache.hadoop.util.MemoryCalculatorPlugin;
+import org.apache.hadoop.util.ProcfsBasedProcessTree;
 import org.apache.hadoop.util.ReflectionUtils;
+import org.apache.hadoop.util.ResourceCalculatorPlugin;
+import org.apache.hadoop.util.Shell.ShellCommandExecutor;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.VersionInfo;
-import org.apache.hadoop.util.DiskChecker.DiskErrorException;
-import org.apache.hadoop.util.Shell.ShellCommandExecutor;
-import org.apache.hadoop.mapreduce.security.TokenCache;
-import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
-import org.apache.hadoop.metrics2.util.MBeans;
-import org.apache.hadoop.security.Credentials;
 
 /*******************************************************
  * TaskTracker is a process that starts and tracks MR Tasks
@@ -2093,7 +2096,7 @@ public class TaskTracker implements MRConstants, TaskUmbilicalProtocol,
    * @return total size of free virtual memory.
    */
   long getAvailableVirtualMemoryOnTT() {
-    long availableVirtualMemoryOnTT = TaskTrackerStatus.UNAVAILABLE;
+    long availableVirtualMemoryOnTT = ResourceStatus.UNAVAILABLE;
     if (resourceCalculatorPlugin != null) {
       availableVirtualMemoryOnTT =
               resourceCalculatorPlugin.getAvailableVirtualMemorySize();
@@ -2106,7 +2109,7 @@ public class TaskTracker implements MRConstants, TaskUmbilicalProtocol,
    * @return total size of free physical memory in bytes
    */
   long getAvailablePhysicalMemoryOnTT() {
-    long availablePhysicalMemoryOnTT = TaskTrackerStatus.UNAVAILABLE;
+    long availablePhysicalMemoryOnTT = ResourceStatus.UNAVAILABLE;
     if (resourceCalculatorPlugin != null) {
       availablePhysicalMemoryOnTT =
               resourceCalculatorPlugin.getAvailablePhysicalMemorySize();
@@ -2119,7 +2122,7 @@ public class TaskTracker implements MRConstants, TaskUmbilicalProtocol,
    * @return cumulative CPU used time in millisecond
    */
   long getCumulativeCpuTimeOnTT() {
-    long cumulativeCpuTime = TaskTrackerStatus.UNAVAILABLE;
+    long cumulativeCpuTime = ResourceStatus.UNAVAILABLE;
     if (resourceCalculatorPlugin != null) {
       cumulativeCpuTime = resourceCalculatorPlugin.getCumulativeCpuTime();
     }
@@ -2131,7 +2134,7 @@ public class TaskTracker implements MRConstants, TaskUmbilicalProtocol,
    * @return number of processors
    */
   int getNumProcessorsOnTT() {
-    int numProcessors = TaskTrackerStatus.UNAVAILABLE;
+    int numProcessors = ResourceStatus.UNAVAILABLE;
     if (resourceCalculatorPlugin != null) {
       numProcessors = resourceCalculatorPlugin.getNumProcessors();
     }
@@ -2143,7 +2146,7 @@ public class TaskTracker implements MRConstants, TaskUmbilicalProtocol,
    * @return CPU frequency in kHz
    */
   long getCpuFrequencyOnTT() {
-    long cpuFrequency = TaskTrackerStatus.UNAVAILABLE;
+    long cpuFrequency = ResourceStatus.UNAVAILABLE;
     if (resourceCalculatorPlugin != null) {
       cpuFrequency = resourceCalculatorPlugin.getCpuFrequency();
     }
@@ -2155,7 +2158,7 @@ public class TaskTracker implements MRConstants, TaskUmbilicalProtocol,
    * @return CPU usage in %
    */
   float getCpuUsageOnTT() {
-    float cpuUsage = TaskTrackerStatus.UNAVAILABLE;
+    float cpuUsage = ResourceStatus.UNAVAILABLE;
     if (resourceCalculatorPlugin != null) {
       cpuUsage = resourceCalculatorPlugin.getCpuUsage();
     }
@@ -2786,7 +2789,7 @@ public class TaskTracker implements MRConstants, TaskUmbilicalProtocol,
     void localizeTask(Task task) throws IOException{
 
       // Do the task-type specific localization
-//TODO: are these calls really required
+      // TODO: are these calls really required
       task.localizeConfiguration(localJobConf);
       
       task.setConf(localJobConf);

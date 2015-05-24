@@ -29,7 +29,6 @@ import java.util.Map;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
-import org.apache.hadoop.mapred.TaskTrackerStatus.ResourceStatus;
 
 /**
  * Status information on the current state of the Map-Reduce cluster.

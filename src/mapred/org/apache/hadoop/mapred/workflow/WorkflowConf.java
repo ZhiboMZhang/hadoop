@@ -76,12 +76,16 @@ public class WorkflowConf extends Configuration {
    * Set up addition properties in the workflow job's JobConf objects.
    */
   private void initJobs() {
+    // I think this should actually be later???? TODO ???
     // TODO: Mainly, need to deal with input/output paths + temporary paths.
     // TODO: parse parameters to get main class, set in JobConfs. ?
     // TODO: determine first and last job to set up in & out paths
+    // workflow-dir/job-dir/in
+    // workflow-dir/job-dir/out
 
     for (String name : jobs.keySet()) {
       JobInfo job = jobs.get(name);
+      job.jobConf.setWorkingDirectory(null); // ??
     }
   }
 
@@ -111,7 +115,7 @@ public class WorkflowConf extends Configuration {
 
         jobs.put(name, job);
       } else {
-        // Throw exception, misconfigured job.
+        // TODO: Throw exception, misconfigured job.
       }
 
     } catch (Exception e) {

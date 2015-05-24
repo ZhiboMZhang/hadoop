@@ -21,8 +21,8 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.mapred.JobInProgress;
 import org.apache.hadoop.mapred.JobTracker;
+import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.TaskTrackerStatus;
-import org.apache.hadoop.mapred.TaskTrackerStatus.ResourceStatus;
 import org.apache.hadoop.mapreduce.JobID;
 import org.apache.hadoop.mapreduce.TaskType;
 
@@ -34,7 +34,6 @@ public class TaskTracker {
   static final Log LOG = LogFactory.getLog(TaskTracker.class);
   
   final private String trackerName;
-  private ResourceStatus resources;
   private TaskTrackerStatus status;
 
   private JobInProgress jobForFallowMapSlot;
@@ -49,21 +48,10 @@ public class TaskTracker {
   }
 
   /**
-   * Create a new {@link TaskTracker}.
-   * 
-   * @param trackerName A unique identifier for the <code>TaskTracker</code>.
-   * @param
+   * Get the task tracker's resource status information.
    */
-  public TaskTracker(String trackerName, ResourceStatus resources) {
-    this.trackerName = trackerName;
-    this.resources = resources;
-  }
-
-  /**
-   * Get the task tracker's resource information.
-   */
-  public ResourceStatus getResources() {
-    return resources;
+  public ResourceStatus getResourceStatus() {
+    return status.getResourceStatus();
   }
 
   /**
