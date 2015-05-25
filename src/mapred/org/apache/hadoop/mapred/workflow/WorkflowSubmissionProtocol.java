@@ -20,8 +20,8 @@ import java.io.IOException;
 
 import org.apache.hadoop.ipc.VersionedProtocol;
 import org.apache.hadoop.mapred.ClusterStatus;
+import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.JobTracker;
-import org.apache.hadoop.security.Credentials;
 
 /**
  * Protocol that a {@link WorkflowClient} and the {@link JobTracker} use to
@@ -46,7 +46,7 @@ public interface WorkflowSubmissionProtocol extends VersionedProtocol {
    */
   // TODO: Update JavaDoc.
   public WorkflowStatus submitWorkflow(WorkflowID workflowId,
-      String workflowSubmitDir, Credentials credentials) throws IOException;
+      String workflowSubmitDir, String name) throws IOException;
 
   /**
    * Allocate a name for the workflow.
@@ -55,6 +55,14 @@ public interface WorkflowSubmissionProtocol extends VersionedProtocol {
    * @throws IOException
    */
   public WorkflowID getNewWorkflowId() throws IOException;
+
+  /**
+   * Allocate a name for jobs belonging to a workflow.
+   *
+   * @return A unique job name for submitting jobs.
+   * @throws IOException
+   */
+  public JobID getNewJobId() throws IOException;
 
   /**
    * Get the current status of the cluster.

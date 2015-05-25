@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.security.UserGroupInformation;
 
 /**
@@ -80,6 +81,22 @@ public class WorkflowSubmissionFiles {
       fileSystem.mkdirs(stagingArea, new FsPermission(WORKFLOW_DIR_PERMISSION));
     }
     return stagingArea;
+  }
+
+  /**
+   * TODO
+   *
+   * @param client
+   * @param conf
+   *
+   * @return
+   * @throws IOException
+   * @throws InterruptedException
+   */
+  public static Path getStagingDir(WorkflowClient client,
+      WorkflowConf workflowConf, JobConf jobConf)
+      throws IOException, InterruptedException {
+    return null;
   }
 
 }

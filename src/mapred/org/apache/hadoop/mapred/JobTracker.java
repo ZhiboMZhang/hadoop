@@ -3632,8 +3632,9 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
         new Path(workflowStagingRootDir, user + "/.staging")).toString();
   }
 
+  // The workflow has been submitted.
   public WorkflowStatus submitWorkflow(WorkflowID workflowId,
-      String workflowSubmitDir, Credentials credentials) throws IOException {
+      String workflowSubmitDir, String name) throws IOException {
     return null;
   }
 

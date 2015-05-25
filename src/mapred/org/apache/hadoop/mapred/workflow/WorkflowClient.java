@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.logging.Log;
@@ -35,9 +36,12 @@ import org.apache.hadoop.io.retry.RetryUtils;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.mapred.ClusterStatus;
 import org.apache.hadoop.mapred.JobClient;
+import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.JobTracker;
 import org.apache.hadoop.mapred.JobTrackerNotYetInitializedException;
+import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.SafeModeException;
+import org.apache.hadoop.mapred.workflow.WorkflowConf.JobInfo;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
 
@@ -252,8 +256,9 @@ public class WorkflowClient extends Configured {
         workflowCopy.set("mapreduce.workflow.dir", submitWorkflowDir.toString());
 
         // Get cluster status information from the JobTracker.
-        ClusterStatus clusterStatus = workflowSubmitClient
-            .getClusterStatus(true);
+        ClusterStatus clusterStatus;
+        clusterStatus = workflowSubmitClient.getClusterStatus(true);
+        Map<String, ResourceStatus> machines = clusterStatus.getTrackerInfo();
 
         // Read in the machine type information.
         // TODO: Should this file location/name be set in configuration?
@@ -263,32 +268,57 @@ public class WorkflowClient extends Configured {
         Set<MachineType> machineTypes = MachineType.parse(machineXml);
 
         // Generate the scheduling plan.
+        // Scheduling requires:
+        // - machine type information (cost/stats of different rented nodes)
+        // - cluster machine information (stats of nodes in the cluster)
+        //
+        // - constraint information (in workflow conf)
+        // - workflow job information [map splits, reduces] (in workflow conf)
+        // - workflow information [dependencies] (in workflow conf)
+        //
         // TODO
-        // what? need ->
-        // constraint info, (yes, in workflowconf)
-        // machine type w/ rate (yes, from xml file)
-        // machines in cluster w/ hardware & slot info (yes, from ClusterStatus)
+        workflowCopy.generatePlan(machineTypes, machines);
 
-        // job information from workflow conf (internal) (in workflowconf?)
-        // - dag/dependencies
-        // - map/red # of slots
+        // Compute DAG from workflow conf.
 
-        // workflowCopy.generatePlan(machineTypes,
-        // clusterStatus.getTrackerInfo());
+        // Compute job information -- TODO refactor into method
+        Map<String, JobInfo> workflowJobs = workflowCopy.getJobs();
+        for (String job : workflowJobs.keySet()) {
+          JobInfo jobInfo = workflowJobs.get(job);
+
+          // Staging & submit directories, other job setup information.
+          // TODO: alter job location, in WFSubFiles, or here?
+          Path jobStagingArea = WorkflowSubmissionFiles.getStagingDir(
+              WorkflowClient.this, workflowCopy, jobInfo.jobConf);
+          JobID jobId = workflowSubmitClient.getNewJobId();
+          Path submitJobDir = new Path(jobStagingArea, jobId.toString());
+          jobInfo.jobConf.set("mapreduce.job.dir", submitJobDir.toString());
+
+          // What about in/output directory??
+          jobInfo.jobConf.set("mapred.input.dir", null);
+          jobInfo.jobConf.set("mapred.output.dir", null);
+
+          // Compute # of maps/reduces.
+          // TODO: JobClient line number 972
+
+          // Set the main class from the parameters string?
+          // TODO: ??
+
+        }
+        // TODO: write configuration into HDFS so that jobtracker can read it
 
         // TODO - how to split workflow in multiple jobs to run
-        // -> should put each workflow-job working directory in workflow dir
-        // copyAndConfigureFiles(workflowCopy, submitWorkflowDir);
+        copyAndConfigureFiles(workflowCopy, submitWorkflowDir);
 
         // Submit the workflow.
-        // need to figure out also how to generate job conf / jobs from
-        // the workflow conf, and how later to know to assigned their tasks
-        // to a specific machine slot type.
-        WorkflowStatus status = null;
+        // TODO: instead of ugi it should be workflowCopy.getCredentials()?
+        // TODO: fill in on jobtracker side
+        WorkflowStatus status = workflowSubmitClient.submitWorkflow(workflowId,
+            submitWorkflowDir.toString(), ugi.getShortUserName());
 
+        WorkflowProfile profile = workflowSubmitClient
+            .getWorkflowProfile(workflowId);
 
-        WorkflowProfile profile = null;
-        // workflowSubmitClient.getWorkflowProfile(null);
         if (status != null && profile != null) {
           return new NetworkedWorkflow(status, profile, workflowSubmitClient);
         } else {

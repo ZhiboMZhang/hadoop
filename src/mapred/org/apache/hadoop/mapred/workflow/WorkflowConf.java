@@ -26,6 +26,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.util.ClassUtil;
 
 public class WorkflowConf extends Configuration {
@@ -51,13 +52,20 @@ public class WorkflowConf extends Configuration {
     public String parameters;
   }
 
-  private SchedulingPlan scheduler;
+  // private SchedulingPlan scheduler;
   private HashMap<String, JobInfo> jobs;
   private Map<String, Set<String>> dependencies;
 
   public WorkflowConf(Class<?> exampleClass) {
     this.dependencies = new HashMap<String, Set<String>>();
     setJarByClass(exampleClass);
+  }
+  
+  /**
+   * Return the {@link JobInfo jobs} which comprise the workflow.
+   */
+  public Map<String, JobInfo> getJobs() {
+    return jobs;
   }
 
   /**
@@ -66,27 +74,10 @@ public class WorkflowConf extends Configuration {
    * 
    * @return TODO
    */
-  public boolean generatePlan() {
-    // TODO
-    initJobs();
-    return scheduler.generatePlan(this);
-  }
-
-  /**
-   * Set up addition properties in the workflow job's JobConf objects.
-   */
-  private void initJobs() {
-    // I think this should actually be later???? TODO ???
-    // TODO: Mainly, need to deal with input/output paths + temporary paths.
-    // TODO: parse parameters to get main class, set in JobConfs. ?
-    // TODO: determine first and last job to set up in & out paths
-    // workflow-dir/job-dir/in
-    // workflow-dir/job-dir/out
-
-    for (String name : jobs.keySet()) {
-      JobInfo job = jobs.get(name);
-      job.jobConf.setWorkingDirectory(null); // ??
-    }
+  public boolean generatePlan(Set<MachineType> machineTypes,
+      Map<String, ResourceStatus> machines) {
+    // return scheduler.generatePlan(machineTypes, machines, this);
+    return true;
   }
 
   /**
