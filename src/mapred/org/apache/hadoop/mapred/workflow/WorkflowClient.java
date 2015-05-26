@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -36,14 +37,18 @@ import org.apache.hadoop.io.retry.RetryUtils;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.mapred.ClusterStatus;
 import org.apache.hadoop.mapred.JobClient;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.JobTracker;
 import org.apache.hadoop.mapred.JobTrackerNotYetInitializedException;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.SafeModeException;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.JobInfo;
+import org.apache.hadoop.mapreduce.InputFormat;
+import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.util.ReflectionUtils;
 
 
 /**
@@ -102,11 +107,11 @@ public class WorkflowClient extends Configured {
 
   private static final Log LOG = LogFactory.getLog(WorkflowClient.class);
 
-  private UserGroupInformation ugi;
   private WorkflowSubmissionProtocol rpcWorkflowSubmitClient;
   private WorkflowSubmissionProtocol workflowSubmitClient;
 
   private Path stagingAreaDir = null;
+  private UserGroupInformation ugi;
 
   /**
    * Constructor for the WorkflowClient.
@@ -267,44 +272,16 @@ public class WorkflowClient extends Configured {
             + Path.SEPARATOR + "machineTypes.xml";
         Set<MachineType> machineTypes = MachineType.parse(machineXml);
 
+        // Initialize/compute job information.
+        updateJobInfo(workflowCopy);
+        updateJobIoPaths(workflowCopy);
+
+        // Check output.
+        checkOutputSpecification(workflowCopy);
+
         // Generate the scheduling plan.
-        // Scheduling requires:
-        // - machine type information (cost/stats of different rented nodes)
-        // - cluster machine information (stats of nodes in the cluster)
-        //
-        // - constraint information (in workflow conf)
-        // - workflow job information [map splits, reduces] (in workflow conf)
-        // - workflow information [dependencies] (in workflow conf)
-        //
-        // TODO
         workflowCopy.generatePlan(machineTypes, machines);
 
-        // Compute DAG from workflow conf.
-
-        // Compute job information -- TODO refactor into method
-        Map<String, JobInfo> workflowJobs = workflowCopy.getJobs();
-        for (String job : workflowJobs.keySet()) {
-          JobInfo jobInfo = workflowJobs.get(job);
-
-          // Staging & submit directories, other job setup information.
-          // TODO: alter job location, in WFSubFiles, or here?
-          Path jobStagingArea = WorkflowSubmissionFiles.getStagingDir(
-              WorkflowClient.this, workflowCopy, jobInfo.jobConf);
-          JobID jobId = workflowSubmitClient.getNewJobId();
-          Path submitJobDir = new Path(jobStagingArea, jobId.toString());
-          jobInfo.jobConf.set("mapreduce.job.dir", submitJobDir.toString());
-
-          // What about in/output directory??
-          jobInfo.jobConf.set("mapred.input.dir", null);
-          jobInfo.jobConf.set("mapred.output.dir", null);
-
-          // Compute # of maps/reduces.
-          // TODO: JobClient line number 972
-
-          // Set the main class from the parameters string?
-          // TODO: ??
-
-        }
         // TODO: write configuration into HDFS so that jobtracker can read it
 
         // TODO - how to split workflow in multiple jobs to run
@@ -329,6 +306,147 @@ public class WorkflowClient extends Configured {
 
       }
     });
+  }
+
+  /**
+   * Update initial workflow job information.
+   *
+   * This function initializes all workflow job's staging & submit directories,
+   * as well as setting up initial input and output directories. The number of
+   * map and reduce tasks are also updated in the {@link JobInfo} class (so that
+   * they can be used by a scheduler/planner).
+   */
+  // TODO: test
+  private void updateJobInfo(WorkflowConf workflow) throws IOException,
+      InterruptedException, ClassNotFoundException {
+
+    Map<String, JobInfo> workflowJobs = workflow.getJobs();
+
+    for (String job : workflowJobs.keySet()) {
+      JobInfo jobInfo = workflowJobs.get(job);
+      JobConf jobConf = jobInfo.jobConf;
+
+      // Staging & submit directories, other job setup information.
+      Path stagingArea = WorkflowSubmissionFiles.getStagingDir(
+          WorkflowClient.this, workflow);
+      JobID jobId = workflowSubmitClient.getNewJobId();
+      Path submitJobDir = new Path(stagingArea, jobId.toString());
+      jobConf.set("mapreduce.job.dir", submitJobDir.toString());
+
+      jobInfo.jobId = jobId;
+
+      // Compute # of maps/reduces.
+      jobInfo.numReduces = jobConf.getNumReduceTasks();
+
+      JobContext context = new JobContext(jobConf, jobId);
+      jobInfo.numMaps = writeSplits(context, submitJobDir);
+      jobConf.setNumMapTasks(jobInfo.numMaps);
+
+      // Set up input directories for all jobs.
+      String jobInputDir = jobConf.get("mapreduce.job.dir") + Path.SEPARATOR
+          + "input";
+      jobConf.set("mapred.input.dir", jobInputDir);
+
+      // Set the main class from the parameters string (TODO:??)
+      // (Look through execution of job to see how this is handled.)
+    }
+
+  }
+
+  /**
+   * Workflow job input and output paths are updated to their final values.
+   *
+   * The function takes into account workflow job dependency information to
+   * properly update input and output data paths between jobs.
+   */
+  // TODO: test
+  private void updateJobIoPaths(WorkflowConf workflow) {
+
+    Map<String, JobInfo> workflowJobs = workflow.getJobs();
+    Map<String, Set<String>> dependencyMap = workflow.getDependencies();
+    Set<String> dependencies = new HashSet<String>();
+
+    String workflowInputDir = workflow.get("mapred.input.dir");
+    String workflowOutputDir = workflow.get("mapred.output.dir");
+
+    // Iterate through jobs with dependencies to set their in/output paths.
+    for (String job : dependencyMap.keySet()) {
+      JobConf jobConf = workflowJobs.get(job).jobConf;
+      Set<String> jobDependencies = dependencyMap.get(job);
+
+      // A job with x as a dependency will have its input as x's output.
+      String inputDir = jobConf.get("mapred.input.dir");
+      for (String dependency : jobDependencies) {
+        JobConf jobConfDependency = workflowJobs.get(dependency).jobConf;
+        jobConfDependency.set("mapred.output.dir", inputDir);
+        dependencies.add(dependency);
+      }
+    }
+
+    // Job with no dependencies are entry jobs.
+    for (String job : workflow.getJobs().keySet()) {
+      if (dependencyMap.get(job) == null) {
+        JobConf jobConf = workflowJobs.get(job).jobConf;
+        jobConf.set("mapred.input.dir", workflowInputDir);
+      }
+    }
+
+    // Job's that aren't dependencies for any other jobs are exit jobs.
+    for (String job : workflow.getJobs().keySet()) {
+      if (!dependencies.contains(job)) {
+        JobConf jobConf = workflowJobs.get(job).jobConf;
+        jobConf.set("mapred.output.dir", workflowOutputDir);
+      }
+    }
+  }
+
+  /**
+   * Check that input & output directories for all workflow jobs are valid.
+   *
+   * By default, Hadoop checks the output directories for jobs during execution.
+   * However as we're dealing with a set of interdependent jobs it is better to
+   * check a directory validity before the job is run.
+   */
+  private void checkOutputSpecification(WorkflowConf workflow)
+      throws ClassNotFoundException, IOException, InterruptedException {
+
+    Map<String, JobInfo> workflowJobs = workflow.getJobs();
+
+    for (String job : workflowJobs.keySet()) {
+      JobInfo jobInfo = workflowJobs.get(job);
+      JobConf jobConf = jobInfo.jobConf;
+      JobContext context = new JobContext(jobConf, jobInfo.jobId);
+
+      if (jobConf.getNumReduceTasks() == 0 ? jobConf.getUseNewMapper()
+          : jobConf.getUseNewReducer()) {
+        org.apache.hadoop.mapreduce.OutputFormat<?, ?> output = ReflectionUtils
+            .newInstance(context.getOutputFormatClass(), jobConf);
+        output.checkOutputSpecs(context);
+      } else {
+        jobConf.getOutputFormat().checkOutputSpecs(null, jobConf);
+      }
+    }
+  }
+
+  // Just need to compute the number of splits, not actually split the input.
+  // Done so that the number of splits can be used by the scheduler.
+  private int writeSplits(org.apache.hadoop.mapreduce.JobContext job,
+      Path jobSubmitDir) throws IOException, InterruptedException,
+      ClassNotFoundException {
+
+    JobConf jobConf = (JobConf) job.getConfiguration();
+    int maps;
+
+    if (jobConf.getUseNewMapper()) {
+      InputFormat<?, ?> input = ReflectionUtils.newInstance(
+          job.getInputFormatClass(), job.getConfiguration());
+      maps = input.getSplits(job).size();
+    } else {
+      org.apache.hadoop.mapred.InputSplit[] splits = jobConf.getInputFormat()
+          .getSplits(jobConf, jobConf.getNumMapTasks());
+      maps = splits.length;
+    }
+    return maps;
   }
 
   public Path getStagingAreaDir() throws IOException {

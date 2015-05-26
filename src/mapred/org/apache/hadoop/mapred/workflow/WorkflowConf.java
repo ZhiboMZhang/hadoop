@@ -26,6 +26,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.util.ClassUtil;
 
@@ -49,7 +50,11 @@ public class WorkflowConf extends Configuration {
 
   public class JobInfo {
     public JobConf jobConf;
+    public JobID jobId;
     public String parameters;
+
+    public int numMaps;
+    public int numReduces;
   }
 
   // private SchedulingPlan scheduler;
@@ -69,11 +74,27 @@ public class WorkflowConf extends Configuration {
   }
 
   /**
+   * Return workflow job dependencies, as indicated by job names.
+   */
+  public Map<String, Set<String>> getDependencies() {
+    return dependencies;
+  }
+
+  // @formatter:off
+  /**
    * Generate a scheduling plan for the WorklfowConf, given constraints and any
    * additional information.
    * 
+   * Scheduling requires:
+   * - machine type information (cost/stats of different rented nodes)
+   * - cluster machine information (stats of nodes in the cluster)
+   * - constraint information (in workflow conf)
+   * - workflow job information [map splits, reduces] (in workflow conf)
+   * - workflow information [dependencies] (in workflow conf)
+   *
    * @return TODO
    */
+  // @formatter:on
   public boolean generatePlan(Set<MachineType> machineTypes,
       Map<String, ResourceStatus> machines) {
     // return scheduler.generatePlan(machineTypes, machines, this);

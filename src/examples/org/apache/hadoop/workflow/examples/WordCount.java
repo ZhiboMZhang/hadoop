@@ -23,26 +23,21 @@ import org.apache.hadoop.mapred.workflow.WorkflowClient;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
 
-public class GrepCount {
+public class WordCount {
 
   public static void main(String[] args) throws Exception {
 
-    WorkflowConf workflowConf = new WorkflowConf(GrepCount.class);
-    workflowConf.setWorkflowName("GrepCount");
+    WorkflowConf workflowConf = new WorkflowConf(WordCount.class);
+    workflowConf.setWorkflowName("WordCount-Trivial");
 
     // Set any constraints.
     workflowConf.setConstraint(Constraints.BUDGET, "100m");
 
-    // Specify the jobs that comprise the workflow.
-    // Also each job may or may not require command-line parameters.
-    workflowConf.addJob("Grep", "grep.jar", "org.apache.examples.Grep search");
+    // Specify jobs in the workflow.
     workflowConf.addJob("WordCount", "wordcount.jar",
-        "org.apache.examples.Wordcount");
+        "org.apache.examples.WordCount");
 
-    // And we need to specify for each job its predecessors (if any).
-    workflowConf.addDependency("WordCount", "Grep");
-
-    // We also need to specify the input dataset.
+    // Also specify the input dataset.
     FileInputFormat.setInputPaths(workflowConf, new Path(args[0]));
     FileOutputFormat.setOutputPath(workflowConf, new Path(args[1]));
 
