@@ -16,21 +16,27 @@
  */
 package org.apache.hadoop.mapred.workflow;
 
+import java.io.DataInput;
+import java.io.DataOutput;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.util.ClassUtil;
 
-public class WorkflowConf extends Configuration {
+public class WorkflowConf extends Configuration implements Writable {
 
   public static enum Constraints {
     BUDGET, DEADLINE;
@@ -48,20 +54,41 @@ public class WorkflowConf extends Configuration {
     }
   }
 
-  public class JobInfo {
+  public class JobInfo implements Writable {
     public JobConf jobConf;
     public JobID jobId;
     public String parameters;
 
     public int numMaps;
     public int numReduces;
+
+    @Override
+    public void readFields(DataInput in) throws IOException {
+      jobConf.readFields(in);
+      jobId.readFields(in);
+      parameters = Text.readString(in);
+      numMaps = in.readInt();
+      numReduces = in.readInt();
+    }
+
+    @Override
+    public void write(DataOutput out) throws IOException {
+      jobConf.write(out);
+      jobId.write(out);
+      Text.writeString(out, parameters);
+      out.writeInt(numMaps);
+      out.writeInt(numReduces);
+    }
   }
 
+  public static final Log LOG = LogFactory.getLog(WorkflowConf.class);
+
   // private SchedulingPlan scheduler;
-  private HashMap<String, JobInfo> jobs;
+  private Map<String, JobInfo> jobs;
   private Map<String, Set<String>> dependencies;
 
   public WorkflowConf(Class<?> exampleClass) {
+    this.jobs = new HashMap<String, JobInfo>();
     this.dependencies = new HashMap<String, Set<String>>();
     setJarByClass(exampleClass);
   }
@@ -112,12 +139,17 @@ public class WorkflowConf extends Configuration {
    * @param jarName The path to the jar file belonging to the job.
    */
   public void addJob(String name, String jarName, String parameters) {
+
+    LOG.info("Adding job to workflow.");
+
     // Get location of workflow jar.
     Path jar = new Path(getJar());
 
     try {
       Path addedJarPath = new Path(jar.getParent(), jarName);
       boolean exists = FileSystem.getLocal(this).exists(addedJarPath);
+      LOG.info("Path " + addedJarPath.toString()
+          + (exists ? " exists" : " does not exist"));
       if (exists) {
         // Store contained jobs in JobInfo class as opposed to attributes.
         JobInfo job = new JobInfo();
@@ -128,12 +160,13 @@ public class WorkflowConf extends Configuration {
         jobs.put(name, job);
       } else {
         // TODO: Throw exception, misconfigured job.
+        LOG.info("Path to added job doesn't exist.");
       }
 
     } catch (Exception e) {
-
+      // TODO: Throw exception,
+      LOG.info("Error adding job to workflow.");
     }
-
   }
 
   /**
@@ -248,6 +281,56 @@ public class WorkflowConf extends Configuration {
         return dir;
       } catch (IOException e) {
         throw new RuntimeException(e);
+      }
+    }
+  }
+
+  @Override
+  public void readFields(DataInput in) throws IOException {
+    super.readFields(in);
+
+    // Read in Jobs & Dependencies.
+    int numJobs = in.readInt();
+    for (int i = 0; i < numJobs; i++) {
+      String job = Text.readString(in);
+      JobInfo jobInfo = new JobInfo();
+      jobInfo.readFields(in);
+      jobs.put(job, jobInfo);
+    }
+
+    int numDependencies = in.readInt();
+    for (int i = 0; i < numDependencies; i++) {
+      String job = Text.readString(in);
+      Set<String> jobDependencies = new HashSet<String>();
+
+      // Read the value, a set of values.
+      int numJobDependencies = in.readInt();
+      for (int j = 0; j < numJobDependencies; j++) {
+        jobDependencies.add(Text.readString(in));
+      }
+      dependencies.put(job, jobDependencies);
+    }
+  }
+
+  @Override
+  public void write(DataOutput out) throws IOException {
+    super.write(out);
+
+    // Write out Jobs & Dependencies.
+    out.writeInt(jobs.size());
+    for (String job : jobs.keySet()) {
+      Text.writeString(out, job);
+      jobs.get(job).write(out);
+    }
+
+    out.writeInt(dependencies.size());
+    for (String job : dependencies.keySet()) {
+      Text.writeString(out, job);
+
+      // Write the value, which is itself a set of values..
+      out.writeInt(dependencies.get(job).size());
+      for (String dependency : dependencies.get(job)) {
+        Text.writeString(out, dependency);
       }
     }
   }

@@ -260,10 +260,16 @@ public class WorkflowClient extends Configured {
         Path submitWorkflowDir = new Path(stagingArea, workflowId.toString());
         workflowCopy.set("mapreduce.workflow.dir", submitWorkflowDir.toString());
 
+        LOG.info("Set up workflow staging area.");
+        LOG.info("WorkflowID: " + workflowId.toString());
+        LOG.info("Path submitWorkflowDir: " + submitWorkflowDir.toString());
+
         // Get cluster status information from the JobTracker.
         ClusterStatus clusterStatus;
         clusterStatus = workflowSubmitClient.getClusterStatus(true);
         Map<String, ResourceStatus> machines = clusterStatus.getTrackerInfo();
+
+        LOG.info("Got ClusterStatus, tracker information.");
 
         // Read in the machine type information.
         // TODO: Should this file location/name be set in configuration?
@@ -271,6 +277,8 @@ public class WorkflowClient extends Configured {
         String machineXml = workflowJar.getParent().toString()
             + Path.SEPARATOR + "machineTypes.xml";
         Set<MachineType> machineTypes = MachineType.parse(machineXml);
+
+        LOG.info("Loaded machine types.");
 
         // Initialize/compute job information.
         updateJobInfo(workflowCopy);
@@ -280,29 +288,32 @@ public class WorkflowClient extends Configured {
         checkOutputSpecification(workflowCopy);
 
         // Generate the scheduling plan.
-        workflowCopy.generatePlan(machineTypes, machines);
+        // workflowCopy.generatePlan(machineTypes, machines);
 
         // TODO: write configuration into HDFS so that jobtracker can read it
 
         // TODO - how to split workflow in multiple jobs to run
-        copyAndConfigureFiles(workflowCopy, submitWorkflowDir);
+        // copyAndConfigureFiles(workflowCopy, submitWorkflowDir);
 
         // Submit the workflow.
         // TODO: instead of ugi it should be workflowCopy.getCredentials()?
         // TODO: fill in on jobtracker side
-        WorkflowStatus status = workflowSubmitClient.submitWorkflow(workflowId,
-            submitWorkflowDir.toString(), ugi.getShortUserName());
+        // WorkflowStatus status =
+        // workflowSubmitClient.submitWorkflow(workflowId,
+        // submitWorkflowDir.toString(), ugi.getShortUserName());
 
-        WorkflowProfile profile = workflowSubmitClient
-            .getWorkflowProfile(workflowId);
+        // WorkflowProfile profile = workflowSubmitClient
+        // .getWorkflowProfile(workflowId);
 
-        if (status != null && profile != null) {
-          return new NetworkedWorkflow(status, profile, workflowSubmitClient);
-        } else {
-          throw new IOException("Could not launch workflow.");
-        }
+        // if (status != null && profile != null) {
+        // return new NetworkedWorkflow(status, profile, workflowSubmitClient);
+        // } else {
+        // throw new IOException("Could not launch workflow.");
+        // }
 
         // Clean up if things go wrong.
+        LOG.info("Done submitWorkflowInternal.");
+        return null;
 
       }
     });
@@ -316,13 +327,14 @@ public class WorkflowClient extends Configured {
    * map and reduce tasks are also updated in the {@link JobInfo} class (so that
    * they can be used by a scheduler/planner).
    */
-  // TODO: test
   private void updateJobInfo(WorkflowConf workflow) throws IOException,
       InterruptedException, ClassNotFoundException {
 
+    LOG.info("In updateJobInfo.");
     Map<String, JobInfo> workflowJobs = workflow.getJobs();
 
     for (String job : workflowJobs.keySet()) {
+      LOG.info("Updating information for job: " + job);
       JobInfo jobInfo = workflowJobs.get(job);
       JobConf jobConf = jobInfo.jobConf;
 
@@ -335,22 +347,32 @@ public class WorkflowClient extends Configured {
 
       jobInfo.jobId = jobId;
 
+      LOG.info("Path job staging area: " + stagingArea.toString());
+      LOG.info("JobID:  " + jobId.toString());
+      LOG.info("Path submitJobDir: " + submitJobDir.toString());
+
       // Compute # of maps/reduces.
       jobInfo.numReduces = jobConf.getNumReduceTasks();
+      jobInfo.numMaps = jobConf.getNumMapTasks();
 
-      JobContext context = new JobContext(jobConf, jobId);
-      jobInfo.numMaps = writeSplits(context, submitJobDir);
-      jobConf.setNumMapTasks(jobInfo.numMaps);
+      // TODO: decide what to do -> can't compute maps wo/ intermediate data
+      // JobContext context = new JobContext(jobConf, jobId);
+      // jobInfo.numMaps = writeSplits(context, submitJobDir);
+      // jobConf.setNumMapTasks(jobInfo.numMaps);
+
+      LOG.info("Set # of reduces: " + jobInfo.numReduces);
+      LOG.info("Set # of maps: " + jobInfo.numMaps);
 
       // Set up input directories for all jobs.
       String jobInputDir = jobConf.get("mapreduce.job.dir") + Path.SEPARATOR
           + "input";
       jobConf.set("mapred.input.dir", jobInputDir);
 
+      LOG.info("Temporary job input directory: " + jobInputDir);
+
       // Set the main class from the parameters string (TODO:??)
       // (Look through execution of job to see how this is handled.)
     }
-
   }
 
   /**
@@ -359,8 +381,9 @@ public class WorkflowClient extends Configured {
    * The function takes into account workflow job dependency information to
    * properly update input and output data paths between jobs.
    */
-  // TODO: test
   private void updateJobIoPaths(WorkflowConf workflow) {
+
+    LOG.info("In updateJobIoPaths.");
 
     Map<String, JobInfo> workflowJobs = workflow.getJobs();
     Map<String, Set<String>> dependencyMap = workflow.getDependencies();
@@ -368,6 +391,8 @@ public class WorkflowClient extends Configured {
 
     String workflowInputDir = workflow.get("mapred.input.dir");
     String workflowOutputDir = workflow.get("mapred.output.dir");
+    LOG.info("Read workflowInputDir as: " + workflowInputDir);
+    LOG.info("Read workflowOutputDir as: " + workflowOutputDir);
 
     // Iterate through jobs with dependencies to set their in/output paths.
     for (String job : dependencyMap.keySet()) {
@@ -380,6 +405,10 @@ public class WorkflowClient extends Configured {
         JobConf jobConfDependency = workflowJobs.get(dependency).jobConf;
         jobConfDependency.set("mapred.output.dir", inputDir);
         dependencies.add(dependency);
+
+        LOG.info("Set output of " + dependency + "(now: "
+            + jobConfDependency.get("mapred.output.dir") + ") to be input of "
+            + job + " (" + inputDir + ")");
       }
     }
 
@@ -388,6 +417,9 @@ public class WorkflowClient extends Configured {
       if (dependencyMap.get(job) == null) {
         JobConf jobConf = workflowJobs.get(job).jobConf;
         jobConf.set("mapred.input.dir", workflowInputDir);
+
+        LOG.info("Set input of " + job + " (now: "
+            + jobConf.get("mapred.input.dir") + ") to be " + workflowInputDir);
       }
     }
 
@@ -396,6 +428,9 @@ public class WorkflowClient extends Configured {
       if (!dependencies.contains(job)) {
         JobConf jobConf = workflowJobs.get(job).jobConf;
         jobConf.set("mapred.output.dir", workflowOutputDir);
+
+        LOG.info("Set output of " + job + "(now: "
+            + jobConf.get("mapred.output.dir") + ") to be " + workflowOutputDir);
       }
     }
   }
@@ -410,6 +445,7 @@ public class WorkflowClient extends Configured {
   private void checkOutputSpecification(WorkflowConf workflow)
       throws ClassNotFoundException, IOException, InterruptedException {
 
+    LOG.info("In checkOutputSpecificaion.");
     Map<String, JobInfo> workflowJobs = workflow.getJobs();
 
     for (String job : workflowJobs.keySet()) {
