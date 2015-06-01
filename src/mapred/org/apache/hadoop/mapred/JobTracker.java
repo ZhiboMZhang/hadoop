@@ -75,10 +75,14 @@ import org.apache.hadoop.mapred.JobInProgress.KillInterruptedException;
 import org.apache.hadoop.mapred.JobStatusChangeEvent.EventType;
 import org.apache.hadoop.mapred.QueueManager.QueueACL;
 import org.apache.hadoop.mapred.TaskTrackerStatus.TaskTrackerHealthStatus;
+import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowID;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
+import org.apache.hadoop.mapred.workflow.WorkflowInProgressListener;
+import org.apache.hadoop.mapred.workflow.WorkflowInfo;
 import org.apache.hadoop.mapred.workflow.WorkflowProfile;
 import org.apache.hadoop.mapred.workflow.WorkflowStatus;
+import org.apache.hadoop.mapred.workflow.WorkflowSubmissionFiles;
 import org.apache.hadoop.mapred.workflow.WorkflowSubmissionProtocol;
 import org.apache.hadoop.mapreduce.ClusterMetrics;
 import org.apache.hadoop.mapreduce.TaskType;
@@ -226,6 +230,8 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
   private final TaskScheduler taskScheduler;
   private final List<JobInProgressListener> jobInProgressListeners =
     new CopyOnWriteArrayList<JobInProgressListener>();
+  private final List<WorkflowInProgressListener> workflowInProgressListeners =
+      new CopyOnWriteArrayList<WorkflowInProgressListener>();
 
   private List<ServicePlugin> plugins;
   
@@ -1512,6 +1518,7 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
   private String trackerIdentifier;
   long startTime;
   int totalSubmissions = 0;
+  private int totalWorkflowSubmissions = 0;
   private int totalMapTaskCapacity;
   private int totalReduceTaskCapacity;
   private HostsFileReader hostsReader;
@@ -3632,10 +3639,85 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
         new Path(workflowStagingRootDir, user + "/.staging")).toString();
   }
 
-  // The workflow has been submitted.
+  /**
+   * Function called through RPC to submit a workflow to the JobTracker.
+   *
+   * Creates a {@link WorkflowInProgress} object, which contains both
+   * {@link WorkflowProfile} and {@link WorkflowStatus} information. These two
+   * sub-objects are sometimes used outside of the JobTracker, however the
+   * {@link WorkflowInProgress} container adds information used by the
+   * JobTracker.
+   *
+   * @param workflowId
+   * @param workflowSubmitDir
+   * @param name The name of the user running the workflow.
+   *
+   * @return WorkflowStatus
+   */
+  // TODO: this.
   public WorkflowStatus submitWorkflow(WorkflowID workflowId,
-      String workflowSubmitDir, String name) throws IOException {
-    return null;
+      String workflowSubmitDir, UserGroupInformation ugi) throws IOException {
+    checkSafeMode();
+
+    WorkflowInfo workflowInfo = null;
+    if (ugi == null) {
+      ugi = UserGroupInformation.getCurrentUser();
+    }
+
+    synchronized (this) {
+      // Don't restart a workflow if it is already running.
+      if (workflows.containsKey(workflowId)) {
+        return workflows.get(workflowId).getStatus();
+      }
+      workflowInfo = new WorkflowInfo(workflowId, new Text(
+          ugi.getShortUserName()), new Path(workflowSubmitDir));
+    }
+
+    Path submitDir = new Path(workflowSubmitDir);
+    Path confDir = WorkflowSubmissionFiles.getConfDir(submitDir);
+    WorkflowConf workflowConf = WorkflowSubmissionFiles.readConf(this.fs,
+        confDir);
+
+    WorkflowInProgress workflow = new WorkflowInProgress(this, workflowConf,
+        workflowInfo);
+
+    WorkflowStatus status;
+    try {
+      status = addWorkflow(workflowId, workflow);
+    } catch (IOException ioe) {
+      LOG.info("Workflow " + workflowId + " submission failed!", ioe);
+      // TODO
+      throw ioe;
+    }
+
+    return status;
+  }
+
+  /**
+   * Adds a workflow to the JobTracker. This is the core workflow submission
+   * logic.
+   *
+   * @param workflowId The id for the workflow submitted.
+   * @param workflow The WorkflowInProgress object corresponding to the
+   *          submitted workflow.
+   */
+  // TODO: what are the workflowInProgressListeners?
+  private synchronized WorkflowStatus addWorkflow(WorkflowID workflowId,
+      WorkflowInProgress workflow)
+      throws IOException {
+
+    totalWorkflowSubmissions++;
+
+    synchronized (workflows) {
+      synchronized (taskScheduler) {
+        workflows.put(workflow.getProfile().getWorkflowId(), workflow);
+        for (WorkflowInProgressListener listener : workflowInProgressListeners) {
+          listener.workflowAdded(workflow);
+        }
+      }
+    }
+
+    return workflow.getStatus();
   }
 
   // //////////////////////////////////////////////////

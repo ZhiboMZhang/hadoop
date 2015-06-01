@@ -20,6 +20,8 @@ import java.io.IOException;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -35,7 +37,8 @@ public class WorkflowSubmissionFiles {
 
   private final static Log LOG = LogFactory.getLog(WorkflowSubmissionFiles.class);
 
-  private final static FsPermission WORKFLOW_DIR_PERMISSION = FsPermission
+  private final static String WORKFLOW_CONF_REPLICATED_NAME = "workflow.conf";
+  public final static FsPermission WORKFLOW_DIR_PERMISSION = FsPermission
       .createImmutable((short) 0700);
 
   /**
@@ -82,4 +85,68 @@ public class WorkflowSubmissionFiles {
     return stagingArea;
   }
 
+  /**
+   * Get the workflow jar path.
+   */
+  public static Path getWorkflowJar(Path workflowSubmitDir) {
+    return new Path(workflowSubmitDir, "workflow.jar");
+  }
+
+  /**
+   *
+   */
+  // TODO: maybe change location?
+  public static Path getConfDir(Path workflowSubmitDir) {
+    return new Path(workflowSubmitDir, "conf");
+  };
+
+  /**
+   * Write the workflow configuration to the given location.
+   *
+   * @param fileSystem The file system to use for writing.
+   * @param directory The directory to use for writing.
+   * @param workflow The workflow configuration to write.
+   * @param replication
+   */
+  public static void writeConf(FileSystem fileSystem, Path directory,
+      WorkflowConf workflow, short replication) throws IOException {
+
+    Path outFile = new Path(directory, WORKFLOW_CONF_REPLICATED_NAME);
+    if (fileSystem.exists(outFile)) {
+      throw new IOException("Workflow configuration file already exists as "
+          + outFile.toString() + ".");
+    }
+
+    FSDataOutputStream out = fileSystem.create(outFile);
+    workflow.write(out);
+    fileSystem.setReplication(outFile, replication);
+    out.close();
+  };
+
+  /**
+   * Read the workflow configuration from a given location.
+   *
+   * @param fileSystem The file system to use for reading.
+   * @param directory The directory to use for reading.
+   */
+  public static WorkflowConf readConf(FileSystem fileSystem, Path directory)
+      throws IOException {
+
+    Path inFile = new Path(directory, WORKFLOW_CONF_REPLICATED_NAME);
+    if (!fileSystem.exists(inFile)) {
+      throw new IOException("Workflow configuration file does not exist as "
+          + inFile.toString());
+    }
+    if (!fileSystem.isFile(inFile)) {
+      throw new IOException("Workflow configuration file " + inFile.toString()
+          + " is not a file.");
+    }
+
+    FSDataInputStream in = fileSystem.open(inFile);
+    WorkflowConf workflow = new WorkflowConf();
+    workflow.readFields(in);
+    in.close();
+
+    return workflow;
+  };
 }

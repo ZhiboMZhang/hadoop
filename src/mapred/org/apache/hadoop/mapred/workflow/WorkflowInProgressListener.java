@@ -32,7 +32,7 @@ public interface WorkflowInProgressListener {
    * @param workflow The added workflow.
    * @throws IOException
    */
-  public void worfklowAdded(WorkflowInProgress workflow) throws IOException;
+  public void workflowAdded(WorkflowInProgress workflow) throws IOException;
 
   /**
    * Invoked when a workflow has been removed from the {@link JobTracker}.

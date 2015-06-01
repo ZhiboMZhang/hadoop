@@ -83,9 +83,15 @@ public class WorkflowConf extends Configuration implements Writable {
 
   public static final Log LOG = LogFactory.getLog(WorkflowConf.class);
 
-  // private SchedulingPlan scheduler;
+  private SchedulingPlan scheduler;
   private Map<String, JobInfo> jobs;
   private Map<String, Set<String>> dependencies;
+
+  /**
+   * Constructor only to be called when using {@link #readFields(in)}
+   * immediately afterwards.
+   */
+  public WorkflowConf() {}
 
   public WorkflowConf(Class<?> exampleClass) {
     this.jobs = new HashMap<String, JobInfo>();
@@ -124,8 +130,7 @@ public class WorkflowConf extends Configuration implements Writable {
   // @formatter:on
   public boolean generatePlan(Set<MachineType> machineTypes,
       Map<String, ResourceStatus> machines) {
-    // return scheduler.generatePlan(machineTypes, machines, this);
-    return true;
+    return scheduler.generatePlan(machineTypes, machines, this);
   }
 
   /**

@@ -18,6 +18,7 @@ package org.apache.hadoop.mapred.workflow;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.mapred.JobTracker;
 
 /**
  * WorkflowInProgress maintains all the info for keeping a Workflow valid. It
@@ -34,6 +35,11 @@ public class WorkflowInProgress {
     public KillInterruptedException(String msg) {
       super(msg);
     }
+  }
+
+  public WorkflowInProgress(JobTracker jobTracker, WorkflowConf workflowConf,
+      WorkflowInfo workflowInfo) {
+
   }
 
   static final Log LOG = LogFactory.getLog(WorkflowInProgress.class);

@@ -31,6 +31,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.io.retry.RetryPolicy;
 import org.apache.hadoop.io.retry.RetryProxy;
 import org.apache.hadoop.io.retry.RetryUtils;
@@ -44,7 +45,6 @@ import org.apache.hadoop.mapred.JobTrackerNotYetInitializedException;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.SafeModeException;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.JobInfo;
-import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -288,33 +288,36 @@ public class WorkflowClient extends Configured {
         checkOutputSpecification(workflowCopy);
 
         // Generate the scheduling plan.
-        // workflowCopy.generatePlan(machineTypes, machines);
+        // TODO
+        // - ordering of tasks to be executed
+        // - pairing, each task to a machine type
+        workflowCopy.generatePlan(machineTypes, machines);
 
-        // TODO: write configuration into HDFS so that jobtracker can read it
+        // Also need to somehow have each node know what type it is?
+        // - so that we can do task -> type -> actual
 
-        // TODO - how to split workflow in multiple jobs to run
-        // copyAndConfigureFiles(workflowCopy, submitWorkflowDir);
+        // Write configuration into HDFS so that JobTracker can read it.
+        copyAndConfigureFiles(workflowCopy, submitWorkflowDir);
 
         // Submit the workflow.
         // TODO: instead of ugi it should be workflowCopy.getCredentials()?
         // TODO: fill in on jobtracker side
-        // WorkflowStatus status =
-        // workflowSubmitClient.submitWorkflow(workflowId,
-        // submitWorkflowDir.toString(), ugi.getShortUserName());
+        WorkflowStatus status = workflowSubmitClient.submitWorkflow(workflowId,
+            submitWorkflowDir.toString(), ugi);
 
-        // WorkflowProfile profile = workflowSubmitClient
-        // .getWorkflowProfile(workflowId);
+        WorkflowProfile profile = workflowSubmitClient
+            .getWorkflowProfile(workflowId);
 
-        // if (status != null && profile != null) {
-        // return new NetworkedWorkflow(status, profile, workflowSubmitClient);
-        // } else {
-        // throw new IOException("Could not launch workflow.");
-        // }
+        // TODO - how to split workflow in multiple jobs to run
+
+        if (status != null && profile != null) {
+          LOG.info("Done submitWorkflowInternal.");
+          return new NetworkedWorkflow(status, profile, workflowSubmitClient);
+        } else {
+          throw new IOException("Could not launch workflow.");
+        }
 
         // Clean up if things go wrong.
-        LOG.info("Done submitWorkflowInternal.");
-        return null;
-
       }
     });
   }
@@ -352,13 +355,10 @@ public class WorkflowClient extends Configured {
       LOG.info("Path submitJobDir: " + submitJobDir.toString());
 
       // Compute # of maps/reduces.
+      // Can't compute maps without intermediate data, so just assume proper
+      // value is given in the configuration file.
       jobInfo.numReduces = jobConf.getNumReduceTasks();
       jobInfo.numMaps = jobConf.getNumMapTasks();
-
-      // TODO: decide what to do -> can't compute maps wo/ intermediate data
-      // JobContext context = new JobContext(jobConf, jobId);
-      // jobInfo.numMaps = writeSplits(context, submitJobDir);
-      // jobConf.setNumMapTasks(jobInfo.numMaps);
 
       LOG.info("Set # of reduces: " + jobInfo.numReduces);
       LOG.info("Set # of maps: " + jobInfo.numMaps);
@@ -391,6 +391,7 @@ public class WorkflowClient extends Configured {
 
     String workflowInputDir = workflow.get("mapred.input.dir");
     String workflowOutputDir = workflow.get("mapred.output.dir");
+
     LOG.info("Read workflowInputDir as: " + workflowInputDir);
     LOG.info("Read workflowOutputDir as: " + workflowOutputDir);
 
@@ -464,27 +465,6 @@ public class WorkflowClient extends Configured {
     }
   }
 
-  // Just need to compute the number of splits, not actually split the input.
-  // Done so that the number of splits can be used by the scheduler.
-  private int writeSplits(org.apache.hadoop.mapreduce.JobContext job,
-      Path jobSubmitDir) throws IOException, InterruptedException,
-      ClassNotFoundException {
-
-    JobConf jobConf = (JobConf) job.getConfiguration();
-    int maps;
-
-    if (jobConf.getUseNewMapper()) {
-      InputFormat<?, ?> input = ReflectionUtils.newInstance(
-          job.getInputFormatClass(), job.getConfiguration());
-      maps = input.getSplits(job).size();
-    } else {
-      org.apache.hadoop.mapred.InputSplit[] splits = jobConf.getInputFormat()
-          .getSplits(jobConf, jobConf.getNumMapTasks());
-      maps = splits.length;
-    }
-    return maps;
-  }
-
   public Path getStagingAreaDir() throws IOException {
     if (stagingAreaDir == null) {
       stagingAreaDir = new Path(
@@ -501,7 +481,8 @@ public class WorkflowClient extends Configured {
    * @throws IOException
    * @throws InterruptedException
    */
-  private void copyAndConfigureFiles(WorkflowConf workflow,
+  // TODO: test
+  private void copyAndConfigureFiles(final WorkflowConf workflow,
       Path submitWorkflowDir) throws IOException, InterruptedException {
 
     short replication = (short) workflow.getInt("mapred.submit.replcation", 1);
@@ -513,19 +494,32 @@ public class WorkflowClient extends Configured {
           + " Please check what files are in that directory.");
     }
 
-    // Write the WorkflowConf into a file (WHY? TODO). ???
+    // Create the workflow directory.
+    // Don't need to create job directories, they're made when the jobs are run.
+    submitWorkflowDir = fileSystem.makeQualified(submitWorkflowDir);
+    FsPermission mapredSysPerms = new FsPermission(
+        WorkflowSubmissionFiles.WORKFLOW_DIR_PERMISSION);
+    FileSystem.mkdirs(fileSystem, submitWorkflowDir, mapredSysPerms);
 
-    // Copy job jar + other files into HDFS.
+    // Copy the workflow configuration, to allow loading from JobTracker.
+    Path confDir = WorkflowSubmissionFiles.getConfDir(submitWorkflowDir);
+    FileSystem.mkdirs(fileSystem, confDir, mapredSysPerms);
+    WorkflowSubmissionFiles.writeConf(fileSystem, confDir, workflow,
+        replication);
 
-    // Get the job information from the workflow configuration.
-    // Create directories for all workflow jobs, copy over their data.
-    // - Don't worry about output directories... (?)
+    // TODO: should I also be moving over the individual job configurations?
 
-    // Map<String, JobInfo> jobs = workflow.getJobConfs();
+    // Copy over the workflow jar file (TODO: is this necessary?).
+    String oldWorkflowJarPath = workflow.getJar();
+    Path oldWorkflowJarFile = new Path(oldWorkflowJarPath);
+    Path newWorkflowJarFile = WorkflowSubmissionFiles
+        .getWorkflowJar(submitWorkflowDir);
 
-    // Modify JobConfs to replace local path in JobConf with HDFS path.
-    // TODO: move over additional in Shen Li's WJobConf into JobConf ???
-
+    workflow.setJar(newWorkflowJarFile.toString());
+    fileSystem.copyFromLocalFile(oldWorkflowJarFile, newWorkflowJarFile);
+    fileSystem.setReplication(newWorkflowJarFile, replication);
+    fileSystem.setPermission(newWorkflowJarFile, new FsPermission(
+        WorkflowSubmissionFiles.WORKFLOW_DIR_PERMISSION));
   }
 
   /**

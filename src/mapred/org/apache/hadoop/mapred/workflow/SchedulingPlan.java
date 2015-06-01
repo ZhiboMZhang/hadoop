@@ -16,18 +16,24 @@
  */
 package org.apache.hadoop.mapred.workflow;
 
-/**
- * A WorkflowProfile is a MapReduce primitive. It tracks a workflow, whether
- * living or dead.
- */
-public class WorkflowProfile {
+import java.util.Map;
+import java.util.Set;
 
-  private final WorkflowID workflowId = null;
-  private String url;
-  private String name;
-  private String user;
+import org.apache.hadoop.mapred.ResourceStatus;
 
-  public WorkflowID getWorkflowId() {
-    return workflowId;
-  }
+public interface SchedulingPlan {
+
+  /**
+   * Generate a scheduling plan.
+   * 
+   * The scheduling plan consists of a mapping between
+   * 
+   * @param machineTypes The available hardware configurations.
+   * @param machines The actual machines present in the cluster.
+   * @param workflow The workflow to be run.
+   * 
+   * @return
+   */
+  public boolean generatePlan(Set<MachineType> machineTypes,
+      Map<String, ResourceStatus> machines, WorkflowConf workflow);
 }
