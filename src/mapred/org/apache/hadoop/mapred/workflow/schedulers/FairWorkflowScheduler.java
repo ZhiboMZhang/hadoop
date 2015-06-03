@@ -14,42 +14,29 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.hadoop.mapred.workflow;
+package org.apache.hadoop.mapred.workflow.schedulers;
 
-import java.io.DataInput;
-import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Collection;
+import java.util.List;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapred.JobInProgress;
+import org.apache.hadoop.mapred.Task;
+import org.apache.hadoop.mapred.TaskScheduler;
+import org.apache.hadoop.mapreduce.server.jobtracker.TaskTracker;
 
-/**
- * Describes the current status of a workflow.
- */
-public class WorkflowStatus implements Writable {
+public class FairWorkflowScheduler extends TaskScheduler {
 
-  private static final Log LOG = LogFactory.getLog(WorkflowStatus.class);
-
-  private WorkflowID workflowId;
-
-  // Required for readFields()/reflection when building the object.
-  public WorkflowStatus() {}
-
-  public WorkflowStatus(WorkflowID workflowId) {
-    this.workflowId = workflowId;
+  @Override
+  public List<Task> assignTasks(TaskTracker taskTracker) throws IOException {
+    // TODO Auto-generated method stub
+    return null;
   }
 
   @Override
-  public void write(DataOutput out) throws IOException {
-    workflowId.write(out);
-  }
-
-  @Override
-  public void readFields(DataInput in) throws IOException {
-
-    workflowId = new WorkflowID();
-    workflowId.readFields(in);
+  public Collection<JobInProgress> getJobs(String queueName) {
+    // TODO Auto-generated method stub
+    return null;
   }
 
 }

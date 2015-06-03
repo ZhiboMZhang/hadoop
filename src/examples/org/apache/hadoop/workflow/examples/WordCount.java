@@ -22,6 +22,7 @@ import org.apache.hadoop.mapred.FileOutputFormat;
 import org.apache.hadoop.mapred.workflow.WorkflowClient;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
+import org.apache.hadoop.mapred.workflow.schedulers.FairSchedulingPlan;
 
 public class WordCount {
 
@@ -36,6 +37,9 @@ public class WordCount {
     // Specify jobs in the workflow.
     workflowConf.addJob("WordCount", "wordcount.jar",
         "org.apache.examples.WordCount");
+
+    // Also set the scheduler/scheduling plan.
+    workflowConf.setSchedulerClass(FairSchedulingPlan.class);
 
     // Also specify the input dataset.
     FileInputFormat.setInputPaths(workflowConf, new Path(args[0]));

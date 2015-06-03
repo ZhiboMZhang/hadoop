@@ -34,7 +34,9 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.ResourceStatus;
+import org.apache.hadoop.mapred.workflow.schedulers.FairSchedulingPlan;
 import org.apache.hadoop.util.ClassUtil;
+import org.apache.hadoop.util.ReflectionUtils;
 
 public class WorkflowConf extends Configuration implements Writable {
 
@@ -55,6 +57,7 @@ public class WorkflowConf extends Configuration implements Writable {
   }
 
   public class JobInfo implements Writable {
+
     public JobConf jobConf;
     public JobID jobId;
     public String parameters;
@@ -64,8 +67,12 @@ public class WorkflowConf extends Configuration implements Writable {
 
     @Override
     public void readFields(DataInput in) throws IOException {
+      jobConf = new JobConf();
       jobConf.readFields(in);
+
+      jobId = new JobID();
       jobId.readFields(in);
+
       parameters = Text.readString(in);
       numMaps = in.readInt();
       numReduces = in.readInt();
@@ -82,8 +89,10 @@ public class WorkflowConf extends Configuration implements Writable {
   }
 
   public static final Log LOG = LogFactory.getLog(WorkflowConf.class);
+  public static final String SCHEDULING_PLAN_PROPERTY_NAME =
+      "mapred.workflow.scheduler";
 
-  private SchedulingPlan scheduler;
+  private SchedulingPlan schedulingPlan;
   private Map<String, JobInfo> jobs;
   private Map<String, Set<String>> dependencies;
 
@@ -94,9 +103,34 @@ public class WorkflowConf extends Configuration implements Writable {
   public WorkflowConf() {}
 
   public WorkflowConf(Class<?> exampleClass) {
+
     this.jobs = new HashMap<String, JobInfo>();
     this.dependencies = new HashMap<String, Set<String>>();
+
     setJarByClass(exampleClass);
+
+    // Load the specified scheduling plan
+    Class<? extends SchedulingPlan> schedulingPlanClass =
+        this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, FairSchedulingPlan.class,
+            SchedulingPlan.class);
+    setSchedulerClasses(schedulingPlanClass);
+  }
+
+  /**
+   * Set the {@link SchedulingPlan} to be used for the workflow.
+   *
+   * @param clazz The class to use for scheduling the workflow.
+   */
+  public void setSchedulerClass(Class<? extends SchedulingPlan> clazz) {
+    setSchedulerClasses(clazz);
+  }
+
+  // TODO
+  private void setSchedulerClasses(Class<? extends SchedulingPlan> clazz) {
+    this.schedulingPlan =
+        (SchedulingPlan) ReflectionUtils.newInstance(clazz, this);
+    // Idea is currently to link the scheduler and schedulingplan together.
+    // So that by specifying one in the configuration all are loaded.
   }
   
   /**
@@ -130,7 +164,8 @@ public class WorkflowConf extends Configuration implements Writable {
   // @formatter:on
   public boolean generatePlan(Set<MachineType> machineTypes,
       Map<String, ResourceStatus> machines) {
-    return scheduler.generatePlan(machineTypes, machines, this);
+    LOG.info("In WorkflowConf generatePlan() function.");
+    return schedulingPlan.generatePlan(machineTypes, machines, this);
   }
 
   /**
@@ -294,6 +329,9 @@ public class WorkflowConf extends Configuration implements Writable {
   public void readFields(DataInput in) throws IOException {
     super.readFields(in);
 
+    jobs = new HashMap<String, JobInfo>();
+    dependencies = new HashMap<String, Set<String>>();
+
     // Read in Jobs & Dependencies.
     int numJobs = in.readInt();
     for (int i = 0; i < numJobs; i++) {
@@ -315,6 +353,12 @@ public class WorkflowConf extends Configuration implements Writable {
       }
       dependencies.put(job, jobDependencies);
     }
+
+    // Read in other properties.
+    Class<? extends SchedulingPlan> schedulingPlanClass =
+        this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, FairSchedulingPlan.class,
+            SchedulingPlan.class);
+    setSchedulerClasses(schedulingPlanClass);
   }
 
   @Override
@@ -338,6 +382,9 @@ public class WorkflowConf extends Configuration implements Writable {
         Text.writeString(out, dependency);
       }
     }
+
+    // Write out other properties.
+    schedulingPlan.write(out);
   }
 
 }

@@ -16,18 +16,44 @@
  */
 package org.apache.hadoop.mapred.workflow;
 
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+
+import org.apache.hadoop.io.Writable;
+
 /**
  * A WorkflowProfile is a MapReduce primitive. It tracks a workflow, whether
  * living or dead.
  */
-public class WorkflowProfile {
+public class WorkflowProfile implements Writable {
 
-  private final WorkflowID workflowId = null;
+  private final WorkflowID workflowId;
   private String url;
   private String name;
   private String user;
 
+  // This constructor is only to be used by the framework internally, or when
+  // calling the readFields() method afterwards.
+  public WorkflowProfile() {
+    this.workflowId = new WorkflowID();
+  }
+
+  public WorkflowProfile(WorkflowID workflowId) {
+    this.workflowId = workflowId.clone();
+  }
+
   public WorkflowID getWorkflowId() {
     return workflowId;
+  }
+
+  @Override
+  public void write(DataOutput out) throws IOException {
+    workflowId.write(out);
+  }
+
+  @Override
+  public void readFields(DataInput in) throws IOException {
+    workflowId.readFields(in);
   }
 }

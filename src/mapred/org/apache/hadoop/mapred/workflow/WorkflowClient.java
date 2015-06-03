@@ -236,6 +236,7 @@ public class WorkflowClient extends Configured {
    * Internal method for submitting workflows to the system.
    *
    * @param workflow The workflow configuration to submit.
+   *
    * @return A proxy object for running the workflow.
    * @throws FileNotFoundException
    * @throws ClassNotFoundException
@@ -270,6 +271,16 @@ public class WorkflowClient extends Configured {
         Map<String, ResourceStatus> machines = clusterStatus.getTrackerInfo();
 
         LOG.info("Got ClusterStatus, tracker information.");
+        for (String machine : machines.keySet()) {
+          ResourceStatus machineStatus = machines.get(machine);
+          LOG.info("Machine " + machine + " has:");
+          LOG.info("Num processors: " + machineStatus.getNumProcessors());
+          LOG.info("Cpu Frequency: " + machineStatus.getCpuFrequency());
+          LOG.info("Total Memory: " + machineStatus.getTotalPhysicalMemory());
+          LOG.info("Total Disk Space: " + machineStatus.getAvailableSpace());
+          LOG.info("Map slots: " + machineStatus.getMaxMapSlots());
+          LOG.info("Reduce slots: " + machineStatus.getMaxReduceSlots());
+        }
 
         // Read in the machine type information.
         // TODO: Should this file location/name be set in configuration?
@@ -287,12 +298,12 @@ public class WorkflowClient extends Configured {
         // Check output.
         checkOutputSpecification(workflowCopy);
 
-        // Generate the scheduling plan.
-        // TODO
+        // Generate the scheduling plan. Needs to provide:
         // - ordering of tasks to be executed
         // - pairing, each task to a machine type
         workflowCopy.generatePlan(machineTypes, machines);
 
+        // TODO:
         // Also need to somehow have each node know what type it is?
         // - so that we can do task -> type -> actual
 
@@ -300,24 +311,26 @@ public class WorkflowClient extends Configured {
         copyAndConfigureFiles(workflowCopy, submitWorkflowDir);
 
         // Submit the workflow.
-        // TODO: instead of ugi it should be workflowCopy.getCredentials()?
-        // TODO: fill in on jobtracker side
         WorkflowStatus status = workflowSubmitClient.submitWorkflow(workflowId,
-            submitWorkflowDir.toString(), ugi);
+            submitWorkflowDir.toString());
+
+        LOG.info("In WorkflowClient. Got WorkflowStatus back from JobTracker.");
 
         WorkflowProfile profile = workflowSubmitClient
             .getWorkflowProfile(workflowId);
 
+        LOG.info("In WorkflowClient. Got WorkflowProfile back from JobTracker.");
+
         // TODO - how to split workflow in multiple jobs to run
 
         if (status != null && profile != null) {
-          LOG.info("Done submitWorkflowInternal.");
+          LOG.info("Done submitWorkflowInternal, returning.");
           return new NetworkedWorkflow(status, profile, workflowSubmitClient);
         } else {
           throw new IOException("Could not launch workflow.");
         }
 
-        // Clean up if things go wrong.
+        // TODO: Clean up if things go wrong.
       }
     });
   }
@@ -481,9 +494,10 @@ public class WorkflowClient extends Configured {
    * @throws IOException
    * @throws InterruptedException
    */
-  // TODO: test
   private void copyAndConfigureFiles(final WorkflowConf workflow,
       Path submitWorkflowDir) throws IOException, InterruptedException {
+
+    LOG.info("In WorkflowClient copyAndConfigureFiles function.");
 
     short replication = (short) workflow.getInt("mapred.submit.replcation", 1);
 
@@ -501,11 +515,15 @@ public class WorkflowClient extends Configured {
         WorkflowSubmissionFiles.WORKFLOW_DIR_PERMISSION);
     FileSystem.mkdirs(fileSystem, submitWorkflowDir, mapredSysPerms);
 
+    LOG.info("Created workflow directory: " + submitWorkflowDir.toString());
+
     // Copy the workflow configuration, to allow loading from JobTracker.
     Path confDir = WorkflowSubmissionFiles.getConfDir(submitWorkflowDir);
     FileSystem.mkdirs(fileSystem, confDir, mapredSysPerms);
     WorkflowSubmissionFiles.writeConf(fileSystem, confDir, workflow,
         replication);
+
+    LOG.info("Wrote workflow configuration into " + confDir);
 
     // TODO: should I also be moving over the individual job configurations?
 
@@ -520,6 +538,8 @@ public class WorkflowClient extends Configured {
     fileSystem.setReplication(newWorkflowJarFile, replication);
     fileSystem.setPermission(newWorkflowJarFile, new FsPermission(
         WorkflowSubmissionFiles.WORKFLOW_DIR_PERMISSION));
+
+    LOG.info("Copied over workflow jar file into " + newWorkflowJarFile);
   }
 
   /**

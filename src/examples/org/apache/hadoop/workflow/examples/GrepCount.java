@@ -22,6 +22,7 @@ import org.apache.hadoop.mapred.FileOutputFormat;
 import org.apache.hadoop.mapred.workflow.WorkflowClient;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
+import org.apache.hadoop.mapred.workflow.schedulers.FairSchedulingPlan;
 
 public class GrepCount {
 
@@ -41,6 +42,9 @@ public class GrepCount {
 
     // And we need to specify for each job its predecessors (if any).
     workflowConf.addDependency("WordCount", "Grep");
+
+    // Also set the scheduler/scheduling plan.
+    workflowConf.setSchedulerClass(FairSchedulingPlan.class);
 
     // We also need to specify the input dataset.
     FileInputFormat.setInputPaths(workflowConf, new Path(args[0]));

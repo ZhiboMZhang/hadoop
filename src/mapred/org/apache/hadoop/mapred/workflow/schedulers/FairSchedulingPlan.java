@@ -14,7 +14,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.hadoop.mapred.workflow;
+package org.apache.hadoop.mapred.workflow.schedulers;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -22,28 +22,34 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.hadoop.io.Writable;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.mapred.ResourceStatus;
+import org.apache.hadoop.mapred.workflow.MachineType;
+import org.apache.hadoop.mapred.workflow.SchedulingPlan;
+import org.apache.hadoop.mapred.workflow.WorkflowConf;
 
-public abstract class SchedulingPlan implements Writable {
+public class FairSchedulingPlan extends SchedulingPlan {
 
-  /**
-   * Generate a scheduling plan.
-   * 
-   * The scheduling plan consists of a mapping between
-   * 
-   * @param machineTypes The available hardware configurations.
-   * @param machines The actual machines present in the cluster.
-   * @param workflow The workflow to be run.
-   * 
-   * @return
-   */
-  public abstract boolean generatePlan(Set<MachineType> machineTypes,
-      Map<String, ResourceStatus> machines, WorkflowConf workflow);
+  public static final Log LOG = LogFactory.getLog(FairSchedulingPlan.class);
 
   @Override
-  public abstract void readFields(DataInput in) throws IOException;
+  // TODO
+  public boolean generatePlan(Set<MachineType> machineTypes,
+      Map<String, ResourceStatus> machines, WorkflowConf workflow) {
+
+    LOG.info("In FairScheduler.class generatePlan() function");
+    return true;
+  }
 
   @Override
-  public abstract void write(DataOutput out) throws IOException;
+  // TODO
+  public void readFields(DataInput in) throws IOException {
+  }
+
+  @Override
+  // TODO
+  public void write(DataOutput out) throws IOException {
+  }
+
 }

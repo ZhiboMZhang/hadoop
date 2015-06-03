@@ -23,7 +23,7 @@ import java.io.IOException;
  * A listener for changes in a {@link JobInProgress job}'s lifecycle in the
  * {@link JobTracker}.
  */
-abstract class JobInProgressListener {
+public abstract class JobInProgressListener {
 
   /**
    * Invoked when a new job has been added to the {@link JobTracker}.

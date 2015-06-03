@@ -32,7 +32,7 @@ import org.apache.hadoop.mapreduce.ID;
  * WORKFLOW string rather than a JOB string).
  */
 public class WorkflowID extends org.apache.hadoop.mapred.ID implements
-    Comparable<ID> {
+    Comparable<ID>, Cloneable {
 
   protected static final String WORKFLOW = "workflow";
   private final Text jtIdentifier;
@@ -70,6 +70,11 @@ public class WorkflowID extends org.apache.hadoop.mapred.ID implements
 
   public String getJtIdentifier() {
     return jtIdentifier.toString();
+  }
+
+  @Override
+  public WorkflowID clone() {
+    return new WorkflowID(this.jtIdentifier.toString(), this.id);
   }
 
   @Override

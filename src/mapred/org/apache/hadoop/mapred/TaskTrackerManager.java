@@ -20,6 +20,8 @@ package org.apache.hadoop.mapred;
 import java.io.IOException;
 import java.util.Collection;
 
+import org.apache.hadoop.mapred.workflow.WorkflowInProgressListener;
+
 /**
  * Manages information about the {@link TaskTracker}s running on a cluster.
  * This interface exits primarily to test the {@link JobTracker}, and is not
@@ -56,6 +58,23 @@ interface TaskTrackerManager {
    * @param jobInProgressListener the {@link JobInProgressListener} to remove
    */
   public void removeJobInProgressListener(JobInProgressListener listener);
+
+  /**
+   * Registers a {@link WorkflowInProgressListener} for updates from this
+   * {@link TaskTrackerManager}.
+   *
+   * @param listener the {@link WorkflowInProgressListener} to add.
+   */
+  public void addWorkflowInProgressListener(WorkflowInProgressListener listener);
+
+  /**
+   * Unregisters a {@link WorkflowInProgressListener} from this
+   * {@link TaskTrackerManager}.
+   *
+   * @param listener the {@link WorkflowInProgressListener} to remove.
+   */
+  public void removeWorkflowInProgressListener(
+      WorkflowInProgressListener listener);
 
   /**
    * Return the {@link QueueManager} which manages the queues in this

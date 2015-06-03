@@ -93,9 +93,8 @@ public class WorkflowSubmissionFiles {
   }
 
   /**
-   *
+   * Given a workflow submission directory, return its configuration directory.
    */
-  // TODO: maybe change location?
   public static Path getConfDir(Path workflowSubmitDir) {
     return new Path(workflowSubmitDir, "conf");
   };

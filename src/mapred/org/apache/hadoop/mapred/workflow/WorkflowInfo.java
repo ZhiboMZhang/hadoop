@@ -20,6 +20,10 @@ public class WorkflowInfo implements Writable {
     this.workflowSubmitDir = workflowSubmitDir;
   }
 
+  public WorkflowID getWorkflowId() {
+    return workflowId;
+  }
+
   @Override
   public void write(DataOutput out) throws IOException {
     workflowId.write(out);

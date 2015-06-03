@@ -37,15 +37,19 @@ public class WorkflowInProgress {
     }
   }
 
-  public WorkflowInProgress(JobTracker jobTracker, WorkflowConf workflowConf,
-      WorkflowInfo workflowInfo) {
-
-  }
-
   static final Log LOG = LogFactory.getLog(WorkflowInProgress.class);
 
   private WorkflowProfile profile;
   private WorkflowStatus status;
+  private WorkflowID workflowId;
+
+  public WorkflowInProgress(JobTracker jobTracker, WorkflowConf workflowConf,
+      WorkflowInfo workflowInfo) {
+
+    this.workflowId = workflowInfo.getWorkflowId();
+    this.status = new WorkflowStatus(workflowId);
+    this.profile = new WorkflowProfile(workflowId);
+  }
 
   public WorkflowStatus getStatus() {
     return status;

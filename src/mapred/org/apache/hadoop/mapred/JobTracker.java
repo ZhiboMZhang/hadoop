@@ -3566,6 +3566,8 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
       throws IOException {
     checkJobTrackerState();
 
+    LOG.info("In JobTracker getWorkflowProfile, getting WorkflowProfile.");
+
     synchronized (this) {
       WorkflowInProgress workflow = workflows.get(workflowId);
       if (workflow != null) {
@@ -3584,6 +3586,8 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
   public WorkflowStatus getWorkflowStatus(WorkflowID workflowId)
       throws IOException {
     checkJobTrackerState();
+
+    LOG.info("In JobTracker getWorkflowStatus, getting WorkflowProfile.");
 
     if (workflowId == null) {
       LOG.warn("JobTracker.getWorkflowStatus();"
@@ -3650,19 +3654,18 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
    *
    * @param workflowId
    * @param workflowSubmitDir
-   * @param name The name of the user running the workflow.
    *
    * @return WorkflowStatus
    */
   // TODO: this.
   public WorkflowStatus submitWorkflow(WorkflowID workflowId,
-      String workflowSubmitDir, UserGroupInformation ugi) throws IOException {
+      String workflowSubmitDir) throws IOException {
     checkSafeMode();
 
+    LOG.info("In JobTracker submitWorkflow function.");
+
     WorkflowInfo workflowInfo = null;
-    if (ugi == null) {
-      ugi = UserGroupInformation.getCurrentUser();
-    }
+    UserGroupInformation ugi = UserGroupInformation.getCurrentUser();
 
     synchronized (this) {
       // Don't restart a workflow if it is already running.
@@ -3673,13 +3676,19 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
           ugi.getShortUserName()), new Path(workflowSubmitDir));
     }
 
+    LOG.info("Created a WorkflowInfo object.");
+
     Path submitDir = new Path(workflowSubmitDir);
     Path confDir = WorkflowSubmissionFiles.getConfDir(submitDir);
     WorkflowConf workflowConf = WorkflowSubmissionFiles.readConf(this.fs,
         confDir);
 
+    LOG.info("Read workflow configuration from DFS.");
+
     WorkflowInProgress workflow = new WorkflowInProgress(this, workflowConf,
         workflowInfo);
+
+    LOG.info("Created WorkflowInProgress object.");
 
     WorkflowStatus status;
     try {
@@ -3689,6 +3698,8 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
       // TODO
       throw ioe;
     }
+
+    LOG.info("Returning WorkflowStatus from JobTracker submitWorkflow function.");
 
     return status;
   }
@@ -3706,6 +3717,8 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
       WorkflowInProgress workflow)
       throws IOException {
 
+    LOG.info("In JobTracker addWorkflow function.");
+
     totalWorkflowSubmissions++;
 
     synchronized (workflows) {
@@ -3713,11 +3726,35 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
         workflows.put(workflow.getProfile().getWorkflowId(), workflow);
         for (WorkflowInProgressListener listener : workflowInProgressListeners) {
           listener.workflowAdded(workflow);
+          LOG.info("Added WorkflowInProgress to WorkflowInProgressListener.");
         }
       }
     }
 
+    LOG.info("Returning WorkflowInProgress status from JobTracker addWorkflow.");
+
     return workflow.getStatus();
+  }
+
+  /**
+   * Add a {@link WorkflowInProgressListener} to the list of listeners.
+   * Schedulers use this function to add themselves to the list, so that they
+   * can be notified of changes.
+   *
+   * @param listener The progress listener to add.
+   */
+  public void addWorkflowInProgressListener(WorkflowInProgressListener listener) {
+    workflowInProgressListeners.add(listener);
+  }
+
+  /**
+   * Remove a {@link WorkflowInProgressListener} from the list of listeners.
+   *
+   * @param listener The progress listener to remove.
+   */
+  public void removeWorkflowInProgressListener(
+      WorkflowInProgressListener listener) {
+    workflowInProgressListeners.remove(listener);
   }
 
   // //////////////////////////////////////////////////

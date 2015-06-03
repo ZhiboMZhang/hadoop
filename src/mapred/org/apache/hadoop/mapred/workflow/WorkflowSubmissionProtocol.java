@@ -22,7 +22,6 @@ import org.apache.hadoop.ipc.VersionedProtocol;
 import org.apache.hadoop.mapred.ClusterStatus;
 import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.JobTracker;
-import org.apache.hadoop.security.UserGroupInformation;
 
 /**
  * Protocol that a {@link WorkflowClient} and the {@link JobTracker} use to
@@ -40,14 +39,13 @@ public interface WorkflowSubmissionProtocol extends VersionedProtocol {
    *
    * @param workflowId
    * @param workflowSubmitDir
-   * @param credentials
    *
    * @return A WorkflowStatus referencing the submitted workflow.
    * @throws IOException
    */
   // TODO: Update JavaDoc.
   public WorkflowStatus submitWorkflow(WorkflowID workflowId,
-      String workflowSubmitDir, UserGroupInformation ugi) throws IOException;
+      String workflowSubmitDir) throws IOException;
 
   /**
    * Allocate a name for the workflow.

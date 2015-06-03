@@ -40,7 +40,7 @@ import org.apache.hadoop.mapreduce.server.jobtracker.TaskTracker;
  * {@link #assignTasks(TaskTracker)}).
  * @see EagerTaskInitializationListener
  */
-abstract class TaskScheduler implements Configurable {
+public abstract class TaskScheduler implements Configurable {
 
   protected Configuration conf;
   protected TaskTrackerManager taskTrackerManager;
