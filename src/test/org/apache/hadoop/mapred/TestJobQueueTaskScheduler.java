@@ -26,7 +26,7 @@ import java.util.Map;
 
 import junit.framework.TestCase;
 
-import org.apache.hadoop.io.BytesWritable;
+import org.apache.hadoop.mapred.workflow.WorkflowInProgressListener;
 import org.apache.hadoop.mapreduce.server.jobtracker.TaskTracker;
 import org.apache.hadoop.mapreduce.split.JobSplit;
 
@@ -243,6 +243,20 @@ public class TestJobQueueTaskScheduler extends TestCase {
     public boolean isInSafeMode() {
       // TODO Auto-generated method stub
       return false;
+    }
+
+    @Override
+    public void addWorkflowInProgressListener(
+        WorkflowInProgressListener listener) {
+      // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public void removeWorkflowInProgressListener(
+        WorkflowInProgressListener listener) {
+      // TODO Auto-generated method stub
+
     }
     
   }

@@ -33,10 +33,9 @@ import junit.framework.TestCase;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.mapred.JobStatusChangeEvent.EventType;
+import org.apache.hadoop.mapred.workflow.WorkflowInProgressListener;
 import org.apache.hadoop.mapreduce.TaskType;
 import org.apache.hadoop.mapreduce.server.jobtracker.TaskTracker;
 import org.apache.hadoop.mapreduce.split.JobSplit;
@@ -693,6 +692,20 @@ public class TestCapacityScheduler extends TestCase {
     public boolean isInSafeMode() {
       // TODO Auto-generated method stub
       return false;
+    }
+
+    @Override
+    public void addWorkflowInProgressListener(
+        WorkflowInProgressListener listener) {
+      // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public void removeWorkflowInProgressListener(
+        WorkflowInProgressListener listener) {
+      // TODO Auto-generated method stub
+
     }
   }
   

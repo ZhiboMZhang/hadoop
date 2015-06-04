@@ -27,8 +27,8 @@ import java.util.Map;
 import junit.framework.TestCase;
 
 import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.mapred.JobInProgress.KillInterruptedException;
 import org.apache.hadoop.mapred.JobStatusChangeEvent.EventType;
+import org.apache.hadoop.mapred.workflow.WorkflowInProgressListener;
 
 public class TestParallelInitialization extends TestCase {
   
@@ -188,6 +188,20 @@ public class TestParallelInitialization extends TestCase {
     public boolean isInSafeMode() {
       // TODO Auto-generated method stub
       return false;
+    }
+
+    @Override
+    public void addWorkflowInProgressListener(
+        WorkflowInProgressListener listener) {
+      // TODO Auto-generated method stub
+
+    }
+
+    @Override
+    public void removeWorkflowInProgressListener(
+        WorkflowInProgressListener listener) {
+      // TODO Auto-generated method stub
+
     }
   }
   
