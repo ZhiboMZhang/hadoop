@@ -25,7 +25,7 @@ import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgressListener;
 import org.apache.hadoop.mapred.JobChangeEvent;
 
-public class FairWorkflowListener extends JobInProgressListener implements
+public class FifoWorkflowListener extends JobInProgressListener implements
     WorkflowInProgressListener {
 
   @Override

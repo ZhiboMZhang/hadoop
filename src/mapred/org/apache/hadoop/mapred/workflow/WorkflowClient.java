@@ -44,6 +44,8 @@ import org.apache.hadoop.mapred.JobTracker;
 import org.apache.hadoop.mapred.JobTrackerNotYetInitializedException;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.SafeModeException;
+import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
+import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.JobInfo;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.net.NetUtils;
@@ -271,16 +273,6 @@ public class WorkflowClient extends Configured {
         Map<String, ResourceStatus> machines = clusterStatus.getTrackerInfo();
 
         LOG.info("Got ClusterStatus, tracker information.");
-        for (String machine : machines.keySet()) {
-          ResourceStatus machineStatus = machines.get(machine);
-          LOG.info("Machine " + machine + " has:");
-          LOG.info("Num processors: " + machineStatus.getNumProcessors());
-          LOG.info("Cpu Frequency: " + machineStatus.getCpuFrequency());
-          LOG.info("Total Memory: " + machineStatus.getTotalPhysicalMemory());
-          LOG.info("Total Disk Space: " + machineStatus.getAvailableSpace());
-          LOG.info("Map slots: " + machineStatus.getMaxMapSlots());
-          LOG.info("Reduce slots: " + machineStatus.getMaxReduceSlots());
-        }
 
         // Read in the machine type information.
         // TODO: Should this file location/name be set in configuration?
@@ -290,6 +282,14 @@ public class WorkflowClient extends Configured {
         Set<MachineType> machineTypes = MachineType.parse(machineXml);
 
         LOG.info("Loaded machine types.");
+
+        // Read in Job/Machine -> Time/Price information, & construct the table.
+        String timeXml = workflowJar.getParent().toString()
+            + Path.SEPARATOR + "workflowTaskTimes.xml";
+        Map<TableKey, TableEntry> table = TimePriceTable.parse(timeXml);
+        TimePriceTable.update(table, machineTypes);
+
+        LOG.info("Loaded time-price table.");
 
         // Initialize/compute job information.
         updateJobInfo(workflowCopy);
@@ -301,7 +301,7 @@ public class WorkflowClient extends Configured {
         // Generate the scheduling plan. Needs to provide:
         // - ordering of tasks to be executed
         // - pairing, each task to a machine type
-        workflowCopy.generatePlan(machineTypes, machines);
+        workflowCopy.generatePlan(machineTypes, machines, table);
 
         // TODO:
         // Also need to somehow have each node know what type it is?

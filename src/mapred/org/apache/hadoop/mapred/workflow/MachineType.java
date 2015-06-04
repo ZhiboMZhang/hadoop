@@ -17,6 +17,7 @@
 package org.apache.hadoop.mapred.workflow;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -134,16 +135,17 @@ public class MachineType {
   }
 
   /**
-   * Look for and parse a "machineTypes.xml" file at the given path.
+   * Parse the given file for machine type information.
    * 
-   * @param filePath A directory containing the "machineTypes.xml" file.
+   * @param xmlFile The file to be parsed.
    * 
    * @return A set of {@link MachineType} objects representing the available
    *         machine types in the current operating environment.
+   * @throws IOException
    */
-  public static Set<MachineType> parse(String filePath) {
+  public static Set<MachineType> parse(String xmlFile) throws IOException {
     Set<MachineType> machineTypes = new HashSet<MachineType>();
-    File machineTypeXmlFile = new File(filePath);
+    File machineTypeXmlFile = new File(xmlFile);
     
     try {
       DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -189,7 +191,9 @@ public class MachineType {
       }
           
     } catch (Exception e) {
-      LOG.fatal("Error parsing machine types file:" + e);
+      LOG.fatal("Error parsing machine types file '" + xmlFile + "'. " + e);
+      throw new IOException("Error parsing machine types file '" + xmlFile
+          + "'. ", e);
     }
 
     return machineTypes;

@@ -22,7 +22,7 @@ import org.apache.hadoop.mapred.FileOutputFormat;
 import org.apache.hadoop.mapred.workflow.WorkflowClient;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
-import org.apache.hadoop.mapred.workflow.schedulers.FairSchedulingPlan;
+import org.apache.hadoop.mapred.workflow.schedulers.FifoSchedulingPlan;
 
 public class GrepCount {
 
@@ -36,6 +36,7 @@ public class GrepCount {
 
     // Specify the jobs that comprise the workflow.
     // Also each job may or may not require command-line parameters.
+    // TODO: Split out parameters into a separate function??
     workflowConf.addJob("Grep", "grep.jar", "org.apache.examples.Grep search");
     workflowConf.addJob("WordCount", "wordcount.jar",
         "org.apache.examples.Wordcount");
@@ -44,7 +45,7 @@ public class GrepCount {
     workflowConf.addDependency("WordCount", "Grep");
 
     // Also set the scheduler/scheduling plan.
-    workflowConf.setSchedulerClass(FairSchedulingPlan.class);
+    workflowConf.setSchedulerClass(FifoSchedulingPlan.class);
 
     // We also need to specify the input dataset.
     FileInputFormat.setInputPaths(workflowConf, new Path(args[0]));

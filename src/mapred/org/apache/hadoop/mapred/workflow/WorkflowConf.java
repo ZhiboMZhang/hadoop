@@ -34,7 +34,9 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.ResourceStatus;
-import org.apache.hadoop.mapred.workflow.schedulers.FairSchedulingPlan;
+import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
+import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
+import org.apache.hadoop.mapred.workflow.schedulers.FifoSchedulingPlan;
 import org.apache.hadoop.util.ClassUtil;
 import org.apache.hadoop.util.ReflectionUtils;
 
@@ -111,7 +113,7 @@ public class WorkflowConf extends Configuration implements Writable {
 
     // Load the specified scheduling plan
     Class<? extends SchedulingPlan> schedulingPlanClass =
-        this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, FairSchedulingPlan.class,
+        this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, FifoSchedulingPlan.class,
             SchedulingPlan.class);
     setSchedulerClasses(schedulingPlanClass);
   }
@@ -153,6 +155,7 @@ public class WorkflowConf extends Configuration implements Writable {
    * additional information.
    * 
    * Scheduling requires:
+   * - time-price table (cost & price of a task wrt/ machine type)
    * - machine type information (cost/stats of different rented nodes)
    * - cluster machine information (stats of nodes in the cluster)
    * - constraint information (in workflow conf)
@@ -163,9 +166,9 @@ public class WorkflowConf extends Configuration implements Writable {
    */
   // @formatter:on
   public boolean generatePlan(Set<MachineType> machineTypes,
-      Map<String, ResourceStatus> machines) {
+      Map<String, ResourceStatus> machines, Map<TableKey, TableEntry> table) {
     LOG.info("In WorkflowConf generatePlan() function.");
-    return schedulingPlan.generatePlan(machineTypes, machines, this);
+    return schedulingPlan.generatePlan(machineTypes, machines, table, this);
   }
 
   /**
@@ -356,7 +359,7 @@ public class WorkflowConf extends Configuration implements Writable {
 
     // Read in other properties.
     Class<? extends SchedulingPlan> schedulingPlanClass =
-        this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, FairSchedulingPlan.class,
+        this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, FifoSchedulingPlan.class,
             SchedulingPlan.class);
     setSchedulerClasses(schedulingPlanClass);
   }

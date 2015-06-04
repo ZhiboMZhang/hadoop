@@ -25,7 +25,7 @@ import org.apache.hadoop.mapred.Task;
 import org.apache.hadoop.mapred.TaskScheduler;
 import org.apache.hadoop.mapreduce.server.jobtracker.TaskTracker;
 
-public class FairWorkflowScheduler extends TaskScheduler {
+public class FifoWorkflowScheduler extends TaskScheduler {
 
   @Override
   public List<Task> assignTasks(TaskTracker taskTracker) throws IOException {

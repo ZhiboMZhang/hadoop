@@ -24,6 +24,8 @@ import java.util.Set;
 
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.ResourceStatus;
+import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
+import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 
 public abstract class SchedulingPlan implements Writable {
 
@@ -34,12 +36,14 @@ public abstract class SchedulingPlan implements Writable {
    * 
    * @param machineTypes The available hardware configurations.
    * @param machines The actual machines present in the cluster.
+   * @param table The time-price table to use.
    * @param workflow The workflow to be run.
    * 
    * @return
    */
   public abstract boolean generatePlan(Set<MachineType> machineTypes,
-      Map<String, ResourceStatus> machines, WorkflowConf workflow);
+      Map<String, ResourceStatus> machines, Map<TableKey, TableEntry> table,
+      WorkflowConf workflow);
 
   @Override
   public abstract void readFields(DataInput in) throws IOException;
