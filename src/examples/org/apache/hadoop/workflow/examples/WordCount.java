@@ -32,7 +32,11 @@ public class WordCount {
     workflowConf.setWorkflowName("WordCount-Trivial");
 
     // Set any constraints.
-    workflowConf.setConstraint(Constraints.BUDGET, "100m");
+    // Budget takes a dollar amount parsed as a double value.
+    // Deadline takes a time amount in any of (whole) seconds (s), minutes (m),
+    // hours (h). With no type flag the assumed type is seconds.
+    workflowConf.setConstraint(Constraints.BUDGET, "100.49");
+    workflowConf.setConstraint(Constraints.DEADLINE, "600s");
 
     // Specify jobs in the workflow.
     workflowConf.addJob("WordCount", "wordcount.jar",

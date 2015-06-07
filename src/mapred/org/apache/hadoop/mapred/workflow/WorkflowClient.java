@@ -306,6 +306,7 @@ public class WorkflowClient extends Configured {
         // TODO:
         // Also need to somehow have each node know what type it is?
         // - so that we can do task -> type -> actual
+        // -> or when node asks for task we can match it to it's type on server
 
         // Write configuration into HDFS so that JobTracker can read it.
         copyAndConfigureFiles(workflowCopy, submitWorkflowDir);
@@ -426,7 +427,7 @@ public class WorkflowClient extends Configured {
       }
     }
 
-    // Job with no dependencies are entry jobs.
+    // Jobs with no dependencies are entry jobs.
     for (String job : workflow.getJobs().keySet()) {
       if (dependencyMap.get(job) == null) {
         JobConf jobConf = workflowJobs.get(job).jobConf;
@@ -437,7 +438,7 @@ public class WorkflowClient extends Configured {
       }
     }
 
-    // Job's that aren't dependencies for any other jobs are exit jobs.
+    // Jobs that aren't dependencies for any other jobs are exit jobs.
     for (String job : workflow.getJobs().keySet()) {
       if (!dependencies.contains(job)) {
         JobConf jobConf = workflowJobs.get(job).jobConf;

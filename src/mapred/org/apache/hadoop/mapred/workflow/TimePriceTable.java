@@ -44,13 +44,35 @@ public class TimePriceTable {
     public String machineTypeName;
     public boolean isMapTask;
 
-    // Only to be used by readFields.
+    /** Only to be used by readFields. */
     public TableKey() {}
     
     public TableKey(String jobName, String machineTypeName, boolean isMapTask) {
       this.jobName = jobName;
       this.machineTypeName = machineTypeName;
       this.isMapTask = isMapTask;
+    }
+
+    @Override
+    public int hashCode() {
+      return jobName.hashCode() + machineTypeName.hashCode()
+          + (isMapTask ? 1 : 0);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+
+      if (obj == null) { return false; }
+      if (this == obj) { return true; }
+      if (getClass() != obj.getClass()) { return false; }
+      final TableKey other = (TableKey) obj;
+      if (jobName.equals(other.jobName)
+          && machineTypeName.equals(other.machineTypeName)
+          && isMapTask == other.isMapTask) {
+        return true;
+      }
+
+      return false;
     }
 
     @Override
@@ -73,7 +95,7 @@ public class TimePriceTable {
     public long execTime; // in seconds.
     public float cost;  // in $.
 
-    // Only to be used by readFields.
+    /** Only to be used by readFields. */
     public TableEntry() {}
 
     public TableEntry(String jobName, String machineTypeName, long execTime,
@@ -183,6 +205,10 @@ public class TimePriceTable {
 
   // Convert given execution time in xml to seconds.
   private static long getExecTime(String text) {
+
+    if (text == null || text.equals("")) {
+      return -1L;
+    }
 
     int multiplier = 1;
 

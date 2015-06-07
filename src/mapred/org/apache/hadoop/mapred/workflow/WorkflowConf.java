@@ -162,7 +162,8 @@ public class WorkflowConf extends Configuration implements Writable {
    * - workflow job information [map splits, reduces] (in workflow conf)
    * - workflow information [dependencies] (in workflow conf)
    *
-   * @return TODO
+   * @return Returns true if the workflow is able to be scheduled, false
+   *         otherwise.
    */
   // @formatter:on
   public boolean generatePlan(Set<MachineType> machineTypes,
@@ -181,7 +182,8 @@ public class WorkflowConf extends Configuration implements Writable {
    * @param name A unique identifier for the job to be executed.
    * @param jarName The path to the jar file belonging to the job.
    */
-  public void addJob(String name, String jarName, String parameters) {
+  public void addJob(String name, String jarName, String parameters)
+      throws IOException {
 
     LOG.info("Adding job to workflow.");
 
@@ -202,13 +204,14 @@ public class WorkflowConf extends Configuration implements Writable {
 
         jobs.put(name, job);
       } else {
-        // TODO: Throw exception, misconfigured job.
-        LOG.info("Path to added job doesn't exist.");
+        LOG.info("Error adding job: path '" + addedJarPath + "' doesn't exist.");
+        throw new IOException("Error adding job: path '" + addedJarPath
+            + "' doesn't exist.");
       }
 
     } catch (Exception e) {
-      // TODO: Throw exception,
       LOG.info("Error adding job to workflow.");
+      throw new IOException("Error adding job to workflow. " + e);
     }
   }
 

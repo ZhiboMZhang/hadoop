@@ -32,7 +32,11 @@ public class GrepCount {
     workflowConf.setWorkflowName("GrepCount");
 
     // Set any constraints.
-    workflowConf.setConstraint(Constraints.BUDGET, "100m");
+    // Budget takes a dollar amount parsed as a double value.
+    // Deadline takes a time amount in any of (whole) seconds (s), minutes (m),
+    // hours (h). With no type flag the assumed type is seconds.
+    workflowConf.setConstraint(Constraints.BUDGET, "42.23");
+    workflowConf.setConstraint(Constraints.DEADLINE, "360");
 
     // Specify the jobs that comprise the workflow.
     // Also each job may or may not require command-line parameters.
