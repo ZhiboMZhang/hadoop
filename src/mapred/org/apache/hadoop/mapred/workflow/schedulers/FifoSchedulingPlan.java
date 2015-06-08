@@ -21,6 +21,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,6 +35,7 @@ import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
+import org.apache.hadoop.mapred.workflow.schedulers.WorkflowUtil.Pair;
 
 /**
  * A basic workflow scheduling plan, schedules jobs & their tasks in a first-in
@@ -42,43 +44,45 @@ import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
 // TODO
 public class FifoSchedulingPlan extends SchedulingPlan {
 
-  public static final Log LOG = LogFactory.getLog(FifoSchedulingPlan.class);
+  private static final Log LOG = LogFactory.getLog(FifoSchedulingPlan.class);
 
   // We can assume that all tasks have the same execution time (which is given).
   // Priorities list keeps a list of WorkflowNodes.
   // (corresponding to TASKS, not stages).
-  private List<WorkflowNode> priorities;
-  private Map<WorkflowNode, MachineType> jobToType;
-  private Map<MachineType, Set<ResourceStatus>> typeToMachine;
-
-  private List<MachineType> sortedMachineTypes;
 
   @Override
   /**
    * Plan generation in this case will return a basic scheduling, disregarding
    *  constraints.
    */
-  // @formatter: off
   public boolean generatePlan(Set<MachineType> machineTypes,
       Map<String, ResourceStatus> machines, Map<TableKey, TableEntry> table,
       WorkflowConf workflow) {
 
     LOG.info("In FairScheduler.class generatePlan() function");
-    printDebugInfo(machineTypes, machines, table);
+    WorkflowUtil.printMachineTypesInfo(machineTypes);
+    WorkflowUtil.printMachinesInfo(machines);
+    WorkflowUtil.printTableInfo(table);
+
+    // Create a map from machine type name to the actual MachineType.
+    Map<String, MachineType> machineType = new HashMap<String, MachineType>();
+    for (MachineType type : machineTypes) {
+      machineType.put(type.getName(), type);
+    }
+    LOG.info("Created map for machineType names to machineType.");
 
     // Get a sorted list of machine types by cost/unit time.
-    // TODO test
-    sortedMachineTypes = new ArrayList<MachineType>(machineTypes);
+    List<MachineType> sortedMachineTypes =
+        new ArrayList<MachineType>(machineTypes);
     Collections.sort(sortedMachineTypes, WorkflowUtil.MACHINE_TYPE_COST_ORDER);
-
-    // Find out what machines we actually have wrt/ the available machine types.
-    // TODO test
-    typeToMachine = WorkflowUtil.matchResourceTypes(machineTypes, machines);
+    LOG.info("Sorted Machine Types.");
+    WorkflowUtil.printMachineTypesInfo(sortedMachineTypes);
 
     // Get the workflow DAG corresponding to the workflow configuration, &c.
     // TODO test
     WorkflowDAG workflowDag =
         WorkflowDAG.construct(machineTypes, machines, workflow);
+    LOG.info("Constructed WorkflowDAG.");
 
     // Set all machines to use the least expensive machine type.
     for (WorkflowNode node : workflowDag.getNodes()) {
@@ -86,75 +90,109 @@ public class FifoSchedulingPlan extends SchedulingPlan {
         node.setMachineType(task, sortedMachineTypes.get(0).getName());
       }
     }
+    LOG.info("Set all nodes in workflow dag to least expensive type.");
 
     // Check that constraints aren't violated.
     // Time is in seconds, Cost is in $$. (see {@link TableEntry})
     // TODO test
-    float pathTime = workflowDag.getTime(table);
-    float pathCost = workflowDag.getCost(table);
+    float workflowCost = workflowDag.getCost(table);
+    String textConstraint = workflow.getConstraint(Constraints.BUDGET);
+    LOG.info("Got " + textConstraint + " as workflow budget constraint.");
+    float constraintCost = WorkflowConf.parseBudgetConstraint(textConstraint);
+    LOG.info("Computed initial path time and workflow cost.");
+    LOG.info("Workflow cost is: " + workflowCost + ", constraint is: "
+        + constraintCost);
 
-    // Find the task to be rescheduled.
-    // TODO: Use critical path to reschedule tasks on quicker machines, until
-    // TODO: the next step takes us over the given budget.
-    // TODO: Find best stage/task on critical path for rescheduling.
-    List<WorkflowNode> criticalPath = workflowDag.getCriticalPath(table);
+    // Budget isn't enough to run the workflow even on the cheapest machines.
+    if (workflowCost > constraintCost) {
+      LOG.info("ERROR: Cheapest workflow cost is above budget constraint.");
+      return false;
+    }
 
-    // TODO: when setting save as proper units.
-    // TODO: Use TimePriceTable.getExecTime() for deadline conversion?
+    LOG.info("Cheapest workflow cost is below budget constraint, running alg.");
+    // Iteratively, find the task to be rescheduled.
+    boolean continuing = true;
+    do {
+      // Use critical path to reschedule tasks on quicker machines.
+      List<WorkflowNode> criticalPath = workflowDag.getCriticalPath(table);
+      LOG.info("Got critical path");
 
-    String budgetConstraint = workflow.getConstraint(Constraints.BUDGET);
-    String deadlineConstraint = workflow.getConstraint(Constraints.DEADLINE);
+      // Find the best task on the critical path for rescheduling.
+      // Just use a basic metric, reschedule the slowest task.
+      WorkflowNode slowestNode = null;
+      int slowestTask = -1;
+      float maxTime = 0;
 
+      // Find the slowest task.
+      for (WorkflowNode node : criticalPath) {
+        for (int task = 0; task < node.getNumTasks(); task++) {
+          String type = node.getMachineType(task);
+          TableKey key = new TableKey(node.getJob(), type, node.isMapStage());
+          float time = table.get(key).execTime;
+          if (time > maxTime) {
+            maxTime = time;
+            slowestNode = node;
+            slowestTask = task;
+          }
+        }
+      }
+      LOG.info("Got slowest task in critical path. It is: "
+          + slowestNode.getName() + ", task: " + slowestTask);
 
-    // Return the current 'cheapest' scheduling as the final schedule. (??)
+      // Update the machine type.
+      String prevType = slowestNode.getMachineType(slowestTask);
+      int prevTypeIdx = sortedMachineTypes.indexOf(machineType.get(prevType));
+      String newType = sortedMachineTypes.get(prevTypeIdx + 1).getName();
+      slowestNode.setMachineType(slowestTask, newType);
+      LOG.info("Updated machine type on " + slowestNode.getName() + " from "
+          + prevType + " to " + newType);
 
-    // TODO: need to change code to consider tasks instead of stages
-    // -----> only change to do is what to do to final machine-task pairing.?
+      // Until the next step takes us over the given budget.
+      workflowCost = workflowDag.getCost(table);
+      constraintCost = WorkflowConf.parseBudgetConstraint(workflow
+              .getConstraint(Constraints.BUDGET));
+      LOG.info("Updated Workflow cost is: " + workflowCost
+          + ", constraint is: " + constraintCost);
 
-    // TODO: need to convert unconstrained scheduling to constrained
-    // (wrt/ number and type of actual machines)
+      // The cost is now over the constraint, undo it & we're finished.
+      if (workflowCost > constraintCost) {
+        LOG.info("Iteration places cost above budget constraint, halting alg.");
+        slowestNode.setMachineType(slowestTask, prevType);
+        continuing = false;
+      }
+    } while (continuing);
 
+    // Return the current 'cheapest' scheduling as the final schedule.
+    // Our scheduling plan is a list of WorkflowNodes (stages), each of which
+    // is paired to a machine. Since tasks are 'the same', a WorkflowNode in
+    // this case represents a task to be executed (WorkflowNodes are repeated).
+    // TODO: test / ???
+    List<Pair<WorkflowNode, MachineType>> taskMapping;
+    taskMapping = new ArrayList<Pair<WorkflowNode, MachineType>>();
+    List<WorkflowNode> ordering = workflowDag.getTopologicalOrdering();
+    Pair<WorkflowNode, MachineType> pair;
+
+    for (WorkflowNode node : ordering) {
+      for (int task = 0; task < node.getNumTasks(); task++) {
+        String type = node.getMachineType(task);
+        pair = new Pair<WorkflowNode, MachineType>(node, machineType.get(type));
+        taskMapping.add(pair);
+      }
+    }
+    LOG.info("Created task mapping.");
+    for (Pair<WorkflowNode, MachineType> p : taskMapping) {
+      LOG.info("Pair maps " + p.from.getName() + " to " + p.to.getName());
+    }
+
+    // Because our model assumes an unconstrained scheduling (unlimited
+    // resources), we need to convert the plan to an actual scheduling wrt/
+    // available cluster resources.
+    // TODO test / ???
+    Map<MachineType, Set<ResourceStatus>> typeToMachine;
+    typeToMachine = WorkflowUtil.matchResourceTypes(machineTypes, machines);
 
     return true;
   }
-
-  // @formatter: on
-
-  @Deprecated
-  private void printDebugInfo(Set<MachineType> machineTypes,
-      Map<String, ResourceStatus> machines, Map<TableKey, TableEntry> table) {
-
-    LOG.info("Machine types:");
-    for (MachineType mType : machineTypes) {
-      LOG.info("Machine " + mType.getName() + " has:");
-      LOG.info("Num processors: " + mType.getNumProcessors());
-      LOG.info("Cpu Frequency: " + mType.getCpuFrequency());
-      LOG.info("Total Memory: " + mType.getTotalPhysicalMemory());
-      LOG.info("Total Disk Space: " + mType.getAvailableSpace());
-      LOG.info("Charge Rate: " + mType.getChargeRate());
-    }
-
-    LOG.info("Machines:");
-    for (String machine : machines.keySet()) {
-      ResourceStatus machineStatus = machines.get(machine);
-      LOG.info("Machine " + machine + " has:");
-      LOG.info("Num processors: " + machineStatus.getNumProcessors());
-      LOG.info("Cpu Frequency: " + machineStatus.getCpuFrequency());
-      LOG.info("Total Memory: " + machineStatus.getTotalPhysicalMemory());
-      LOG.info("Total Disk Space: " + machineStatus.getAvailableSpace());
-      LOG.info("Map slots: " + machineStatus.getMaxMapSlots());
-      LOG.info("Reduce slots: " + machineStatus.getMaxReduceSlots());
-    }
-
-    LOG.info("Time Price Table:");
-    for (TableKey key : table.keySet()) {
-      TableEntry entry = table.get(key);
-      LOG.info(entry.jobName + "/" + entry.machineTypeName + "/"
-          + (entry.isMapTask ? "map" : "red") + ": " + entry.execTime
-          + "seconds, $" + entry.cost);
-    }
-  }
-
 
   @Override
   public void readFields(DataInput in) throws IOException {

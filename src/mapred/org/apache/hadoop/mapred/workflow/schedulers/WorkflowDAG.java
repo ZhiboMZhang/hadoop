@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.MachineType;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
@@ -19,6 +21,8 @@ import org.apache.hadoop.mapred.workflow.WorkflowConf.JobInfo;
  */
 public class WorkflowDAG {
   
+  private static final Log LOG = LogFactory.getLog(WorkflowDAG.class);
+
   private Set<WorkflowNode> nodes;
   private Set<WorkflowNode> entryNodes = null;
   private Set<WorkflowNode> exitNodes = null;
@@ -113,6 +117,7 @@ public class WorkflowDAG {
    */
   public List<WorkflowNode> getCriticalPath(Map<TableKey, TableEntry> table) {
 
+    LOG.info("Computing Critical path.");
     Map<WorkflowNode, Float> distances = getWorkflowNodeWeights(table);
     List<WorkflowNode> criticalPath = new ArrayList<WorkflowNode>();
 
@@ -122,10 +127,12 @@ public class WorkflowDAG {
     for (WorkflowNode exit : getExitNodes()) {
       this.addPredecessor(fakeExitNode, exit);
     }
+    LOG.info("Added fake exit node.");
 
     WorkflowNode criticalNode = fakeExitNode;
     do {
       criticalNode = getNextCriticalNode(distances, criticalNode);
+      LOG.info("Creating critical path, added " + criticalNode.getName());
       criticalPath.add(0, criticalNode);
     } while (criticalNode != null);
 
@@ -163,6 +170,7 @@ public class WorkflowDAG {
   private Map<WorkflowNode, Float> getWorkflowNodeWeights(
       Map<TableKey, TableEntry> table) {
 
+    LOG.info("Computing workflow node weights.");
     Map<WorkflowNode, Float> distances = new HashMap<WorkflowNode, Float>();
     List<WorkflowNode> ordering = getTopologicalOrdering();
 
@@ -171,8 +179,11 @@ public class WorkflowDAG {
       distances.put(node, Float.MIN_VALUE);
     }
     for (WorkflowNode entry : getEntryNodes()) {
-      distances.put(entry, getNodeMaxTime(table, entry));
+      float maxTime = getNodeMaxTime(table, entry);
+      distances.put(entry, maxTime);
+      LOG.info("Updated " + entry.getName() + " weight to " + maxTime);
     }
+    LOG.info("Initialized node weights.");
 
     // Relax the nodes to find their proper weight.
     for (WorkflowNode node : ordering) {
@@ -182,6 +193,7 @@ public class WorkflowDAG {
 
         if (distances.get(next) < otherPath) {
           distances.put(next, otherPath);
+          LOG.info("Updated " + next.getName() + " weight to " + otherPath);
         }
       }
     }
@@ -282,6 +294,7 @@ public class WorkflowDAG {
   public static WorkflowDAG construct(Set<MachineType> machineTypes,
       Map<String, ResourceStatus> machines, WorkflowConf workflow) {
 
+    LOG.info("Constructing WorkflowDAG.");
     WorkflowDAG dag = new WorkflowDAG();
 
     // A temporary mapping to help with DAG creation.
@@ -302,6 +315,7 @@ public class WorkflowDAG {
       dag.addNode(mapStage);
       dag.addNode(redStage);
       infoToMRStages.put(workflowJob, new WorkflowNodePair(mapStage, redStage));
+      LOG.info("Added nodes for job " + jobName);
 
       // Also set up a link between the map & reduce stages of a single job.
       dag.addSuccessor(mapStage, redStage);
@@ -319,6 +333,7 @@ public class WorkflowDAG {
         WorkflowNode pre = infoToMRStages.get(workflowJobs.get(dependency)).red;
         dag.addPredecessor(node, pre);
         dag.addSuccessor(pre, node);
+        LOG.info("Added link from " + pre.getName() + " to " + node.getName());
       }
     }
 

@@ -268,6 +268,7 @@ public class WorkflowConf extends Configuration implements Writable {
    */
   public String getConstraint(Constraints constraintType) {
     String property = "mapred.workflow." + constraintType.toString();
+    LOG.info("Getting constraint from workflowconf, property is: " + property);
     return get(property, "");
   }
 
@@ -280,6 +281,39 @@ public class WorkflowConf extends Configuration implements Writable {
   public void setConstraint(Constraints constraintType, String value) {
     String property = "mapred.workflow." + constraintType.toString();
     set(property, value);
+  }
+
+  /**
+   * Parse a deadline constraint value and return a value measured in seconds.
+   */
+  public static long parseDeadlineConstraint(String text) {
+
+    if (text == null || text.equals("")) {
+      return -1L;
+    }
+
+    int multiplier = 1;
+
+    if (text.endsWith("h")) {
+      multiplier = 60 * 60;
+      text = text.substring(0, text.length() - "h".length());
+
+    } else if (text.endsWith("m")) {
+      multiplier = 60;
+      text = text.substring(0, text.length() - "m".length());
+
+    } else if (text.endsWith("s")) {
+      text = text.substring(0, text.length() - "s".length());
+    }
+
+    return Long.parseLong(text, 10) * multiplier;
+  }
+
+  /**
+   * Parse a budget constraint value and return a value measured in dollars.
+   */
+  public static float parseBudgetConstraint(String constraint) {
+    return Float.parseFloat(constraint);
   }
 
   /**
