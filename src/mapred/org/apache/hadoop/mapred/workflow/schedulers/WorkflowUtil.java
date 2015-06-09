@@ -117,7 +117,7 @@ public class WorkflowUtil {
   }
 
   // Some debugging facilities.
-  public static final Log LOG = LogFactory.getLog(WorkflowUtil.class);
+  private static final Log LOG = LogFactory.getLog(WorkflowUtil.class);
 
   public static void printMachineTypesInfo(Collection<MachineType> machineTypes) {
     LOG.info("Machine types:");

@@ -36,25 +36,33 @@ public class WorkflowDAG {
   }
 
   private void addNode(WorkflowNode node) {
+    // Initialize the successors and predecessors of a node before it is added.
+    this.successors.put(node, new HashSet<WorkflowNode>());
+    this.predecessors.put(node, new HashSet<WorkflowNode>());
+
+    // Add the node to the workflow.
     nodes.add(node);
   }
 
-  private void addSuccessor(WorkflowNode node, WorkflowNode successor) {
-    Set<WorkflowNode> successors = this.successors.get(node);
-    if (successors == null) {
-      successors = new HashSet<WorkflowNode>();
-      this.successors.put(node, successors);
+  private void removeNode(WorkflowNode node) {
+    // Remove pointers to the node, and pointers from the node.
+    for (WorkflowNode linkedNode : nodes) {
+      successors.get(linkedNode).remove(node);
+      predecessors.get(linkedNode).remove(node);
     }
-    successors.add(successor);
+    successors.remove(node);
+    predecessors.remove(node);
+
+    // Remove the node itself.
+    nodes.remove(node);
+  }
+
+  private void addSuccessor(WorkflowNode node, WorkflowNode successor) {
+    successors.get(node).add(successor);
   }
 
   private void addPredecessor(WorkflowNode node, WorkflowNode predecessor) {
-    Set<WorkflowNode> predecessors = this.predecessors.get(node);
-    if (predecessors == null) {
-      predecessors = new HashSet<WorkflowNode>();
-      this.predecessors.put(node, predecessors);
-    }
-    predecessors.add(predecessor);
+    predecessors.get(node).add(predecessor);
   }
 
   /**
@@ -85,7 +93,7 @@ public class WorkflowDAG {
     if (entryNodes == null) {
       entryNodes = new HashSet<WorkflowNode>();
       for (WorkflowNode node : nodes) {
-        if (predecessors.get(node) == null) {
+        if (predecessors.get(node).size() == 0) {
           entryNodes.add(node);
         }
       }
@@ -100,7 +108,7 @@ public class WorkflowDAG {
     if (exitNodes == null) {
       exitNodes = new HashSet<WorkflowNode>();
       for (WorkflowNode node : nodes) {
-        if (successors.get(node) == null) {
+        if (successors.get(node).size() == 0) {
           exitNodes.add(node);
         }
       }
@@ -121,23 +129,31 @@ public class WorkflowDAG {
     Map<WorkflowNode, Float> distances = getWorkflowNodeWeights(table);
     List<WorkflowNode> criticalPath = new ArrayList<WorkflowNode>();
 
+    // Get the exit nodes before adding the fake node so it is not included.
+    Set<WorkflowNode> exitNodes = getExitNodes();
+
     // Add a fake exit node connecting to all real exit nodes.
     // This allows computation of only one path, rather than multiple paths.
-    WorkflowNode fakeExitNode = new WorkflowNode("", 0, true);
-    for (WorkflowNode exit : getExitNodes()) {
-      this.addPredecessor(fakeExitNode, exit);
-    }
+    WorkflowNode fakeExitNode = new WorkflowNode("fakeNode", 0, true);
+    this.addNode(fakeExitNode);
     LOG.info("Added fake exit node.");
+
+    for (WorkflowNode exit : exitNodes) {
+      this.addPredecessor(fakeExitNode, exit);
+      LOG.info("Added " + exit.getName() + " as predecessor of fake exit node.");
+    }
 
     WorkflowNode criticalNode = fakeExitNode;
     do {
-      criticalNode = getNextCriticalNode(distances, criticalNode);
       LOG.info("Creating critical path, added " + criticalNode.getName());
+      criticalNode = getNextCriticalNode(distances, criticalNode);
       criticalPath.add(0, criticalNode);
     } while (criticalNode != null);
 
     // Null check is after adding, so remove the null element.
-    criticalPath.remove(criticalPath.size() - 1);
+    criticalPath.remove(0);
+    this.removeNode(fakeExitNode);
+    LOG.info("Removed fake exit node.");
 
     return criticalPath;
   }
@@ -149,6 +165,8 @@ public class WorkflowDAG {
     WorkflowNode criticalNode = null;
 
     for (WorkflowNode predecessor : getPredecessors(current)) {
+      LOG.info("Checking distance of predecessor " + predecessor.getName()
+          + " of node " + current.getName());
       float distance = distances.get(predecessor);
       if (distance > maxDistance) {
         maxDistance = distance;
@@ -181,7 +199,8 @@ public class WorkflowDAG {
     for (WorkflowNode entry : getEntryNodes()) {
       float maxTime = getNodeMaxTime(table, entry);
       distances.put(entry, maxTime);
-      LOG.info("Updated " + entry.getName() + " weight to " + maxTime);
+      LOG.info("Updated entry node '" + entry.getName() + "' weight to "
+          + maxTime);
     }
     LOG.info("Initialized node weights.");
 
@@ -274,7 +293,7 @@ public class WorkflowDAG {
     marked.add(node);
     for (WorkflowNode next : getSuccessors(node)) {
       if (!marked.contains(next)) {
-        constructTopologicalOrdering(node, marked, ordering);
+        constructTopologicalOrdering(next, marked, ordering);
       }
     }
     ordering.add(0, node);

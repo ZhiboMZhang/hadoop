@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,7 +42,6 @@ import org.apache.hadoop.mapred.workflow.schedulers.WorkflowUtil.Pair;
  * A basic workflow scheduling plan, schedules jobs & their tasks in a first-in
  * first-out manner.
  */
-// TODO
 public class FifoSchedulingPlan extends SchedulingPlan {
 
   private static final Log LOG = LogFactory.getLog(FifoSchedulingPlan.class);
@@ -72,16 +72,13 @@ public class FifoSchedulingPlan extends SchedulingPlan {
     LOG.info("Created map for machineType names to machineType.");
 
     // Get a sorted list of machine types by cost/unit time.
-    List<MachineType> sortedMachineTypes =
-        new ArrayList<MachineType>(machineTypes);
+    List<MachineType> sortedMachineTypes = new ArrayList<MachineType>(machineTypes);
     Collections.sort(sortedMachineTypes, WorkflowUtil.MACHINE_TYPE_COST_ORDER);
     LOG.info("Sorted Machine Types.");
     WorkflowUtil.printMachineTypesInfo(sortedMachineTypes);
 
     // Get the workflow DAG corresponding to the workflow configuration, &c.
-    // TODO test
-    WorkflowDAG workflowDag =
-        WorkflowDAG.construct(machineTypes, machines, workflow);
+    WorkflowDAG workflowDag = WorkflowDAG.construct(machineTypes, machines, workflow);
     LOG.info("Constructed WorkflowDAG.");
 
     // Set all machines to use the least expensive machine type.
@@ -94,14 +91,11 @@ public class FifoSchedulingPlan extends SchedulingPlan {
 
     // Check that constraints aren't violated.
     // Time is in seconds, Cost is in $$. (see {@link TableEntry})
-    // TODO test
     float workflowCost = workflowDag.getCost(table);
-    String textConstraint = workflow.getConstraint(Constraints.BUDGET);
-    LOG.info("Got " + textConstraint + " as workflow budget constraint.");
-    float constraintCost = WorkflowConf.parseBudgetConstraint(textConstraint);
+    String budgetConstraint = workflow.getConstraint(Constraints.BUDGET);
+    float constraintCost = WorkflowConf.parseBudgetConstraint(budgetConstraint);
     LOG.info("Computed initial path time and workflow cost.");
-    LOG.info("Workflow cost is: " + workflowCost + ", constraint is: "
-        + constraintCost);
+    LOG.info("Workflow cost: " + workflowCost + ", constraint: " + constraintCost);
 
     // Budget isn't enough to run the workflow even on the cheapest machines.
     if (workflowCost > constraintCost) {
@@ -111,14 +105,14 @@ public class FifoSchedulingPlan extends SchedulingPlan {
 
     LOG.info("Cheapest workflow cost is below budget constraint, running alg.");
     // Iteratively, find the task to be rescheduled.
-    boolean continuing = true;
-    do {
-      // Use critical path to reschedule tasks on quicker machines.
-      List<WorkflowNode> criticalPath = workflowDag.getCriticalPath(table);
-      LOG.info("Got critical path");
+    Set<WorkflowTask> unReschedulableNodes = new HashSet<WorkflowTask>();
+    List<WorkflowNode> criticalPath = workflowDag.getCriticalPath(table);
+    LOG.info("Got critical path");
 
-      // Find the best task on the critical path for rescheduling.
-      // Just use a basic metric, reschedule the slowest task.
+    // Find the best task on the critical path for rescheduling.
+    // Just use a basic metric, reschedule the slowest task.
+    do {
+
       WorkflowNode slowestNode = null;
       int slowestTask = -1;
       float maxTime = 0;
@@ -126,9 +120,18 @@ public class FifoSchedulingPlan extends SchedulingPlan {
       // Find the slowest task.
       for (WorkflowNode node : criticalPath) {
         for (int task = 0; task < node.getNumTasks(); task++) {
+
+          if (unReschedulableNodes.contains(new WorkflowTask(node, task))) {
+            LOG.info("unReschedulableNodes contains " + node.getName() + ":"
+                + task);
+            continue;
+          }
+          LOG.info("Getting time for node " + node.getName() + ":" + task);
+
           String type = node.getMachineType(task);
           TableKey key = new TableKey(node.getJob(), type, node.isMapStage());
           float time = table.get(key).execTime;
+
           if (time > maxTime) {
             maxTime = time;
             slowestNode = node;
@@ -136,37 +139,53 @@ public class FifoSchedulingPlan extends SchedulingPlan {
           }
         }
       }
-      LOG.info("Got slowest task in critical path. It is: "
-          + slowestNode.getName() + ", task: " + slowestTask);
+
+      // No nodes on the critical path are able to be rescheduled.
+      if (slowestNode == null) { break; }
+
+      LOG.info("Slowest task on critical path is: " + slowestNode.getName()
+          + ":" + slowestTask);
 
       // Update the machine type.
       String prevType = slowestNode.getMachineType(slowestTask);
       int prevTypeIdx = sortedMachineTypes.indexOf(machineType.get(prevType));
-      String newType = sortedMachineTypes.get(prevTypeIdx + 1).getName();
-      slowestNode.setMachineType(slowestTask, newType);
-      LOG.info("Updated machine type on " + slowestNode.getName() + " from "
-          + prevType + " to " + newType);
 
-      // Until the next step takes us over the given budget.
-      workflowCost = workflowDag.getCost(table);
-      constraintCost = WorkflowConf.parseBudgetConstraint(workflow
-              .getConstraint(Constraints.BUDGET));
-      LOG.info("Updated Workflow cost is: " + workflowCost
-          + ", constraint is: " + constraintCost);
+      if (sortedMachineTypes.size() == (prevTypeIdx + 1)) {
+        // Can't reschedule the slowest node.
+        // It's already running on the quickest machine
+        LOG.info("Slowest task is already scheduled on the quickest machine.");
+        unReschedulableNodes.add(new WorkflowTask(slowestNode, slowestTask));
 
-      // The cost is now over the constraint, undo it & we're finished.
-      if (workflowCost > constraintCost) {
-        LOG.info("Iteration places cost above budget constraint, halting alg.");
-        slowestNode.setMachineType(slowestTask, prevType);
-        continuing = false;
+      } else {
+
+        String newType = sortedMachineTypes.get(prevTypeIdx + 1).getName();
+        slowestNode.setMachineType(slowestTask, newType);
+        LOG.info("Updated machine type on " + slowestNode.getName() + " from "
+            + prevType + " to " + newType);
+
+        // Check if the reschedule has increased the cost over the given budget.
+        workflowCost = workflowDag.getCost(table);
+        LOG.info("Updated Workflow cost is: " + workflowCost
+            + ", constraint is: " + constraintCost);
+
+        if (workflowCost > constraintCost) {
+          // Cost is now above the constraint, undo & attempt w/ other tasks.
+          LOG.info("Cost is now above budget constraint, continuing.");
+          slowestNode.setMachineType(slowestTask, prevType);
+          unReschedulableNodes.add(new WorkflowTask(slowestNode, slowestTask));
+        } else {
+          // Reschedule was fine, recompute the critical path.
+          LOG.info("Reschedule was under budget, recomputing critical path.");
+          criticalPath = workflowDag.getCriticalPath(table);
+          unReschedulableNodes.clear();
+        }
       }
-    } while (continuing);
+    } while (true);
 
     // Return the current 'cheapest' scheduling as the final schedule.
     // Our scheduling plan is a list of WorkflowNodes (stages), each of which
     // is paired to a machine. Since tasks are 'the same', a WorkflowNode in
     // this case represents a task to be executed (WorkflowNodes are repeated).
-    // TODO: test / ???
     List<Pair<WorkflowNode, MachineType>> taskMapping;
     taskMapping = new ArrayList<Pair<WorkflowNode, MachineType>>();
     List<WorkflowNode> ordering = workflowDag.getTopologicalOrdering();

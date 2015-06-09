@@ -168,7 +168,6 @@ public class WorkflowConf extends Configuration implements Writable {
   // @formatter:on
   public boolean generatePlan(Set<MachineType> machineTypes,
       Map<String, ResourceStatus> machines, Map<TableKey, TableEntry> table) {
-    LOG.info("In WorkflowConf generatePlan() function.");
     return schedulingPlan.generatePlan(machineTypes, machines, table, this);
   }
 
@@ -268,7 +267,6 @@ public class WorkflowConf extends Configuration implements Writable {
    */
   public String getConstraint(Constraints constraintType) {
     String property = "mapred.workflow." + constraintType.toString();
-    LOG.info("Getting constraint from workflowconf, property is: " + property);
     return get(property, "");
   }
 
