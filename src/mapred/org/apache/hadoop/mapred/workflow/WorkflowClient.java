@@ -79,35 +79,73 @@ public class WorkflowClient extends Configured {
      * of the tasks, so we throw an exception.
      */
     public NetworkedWorkflow(WorkflowStatus status, WorkflowProfile profile,
-        WorkflowSubmissionProtocol workflowSubmissionClient) {
+        WorkflowSubmissionProtocol workflowSubmissionClient) throws IOException {
       this.status = status;
       this.profile = profile;
       this.workflowSubmitClient = workflowSubmissionClient;
+      this.statusTime = System.currentTimeMillis();
+      validateConstruction();
+    }
+
+    // Validate correct object construction.
+    private void validateConstruction() throws IOException {
+      if (status == null) {
+        throw new IOException("The WorkflowStatus cannot be null.");
+      } else if (profile == null) {
+        throw new IOException("The WorkflowProfile cannot be null.");
+      } else if (workflowSubmitClient == null) {
+        throw new IOException("The WorkflowSubmissionProtocol cannot be null.");
+      }
     }
 
     @Override
     public WorkflowID getID() {
-      return null;
+      // TODO: function not called yet in the code.
+      return profile.getWorkflowId();
     }
 
     @Override
     public String getWorkflowName() {
-      return null;
+      // TODO: function not called yet in the code.
+      return profile.getWorkflowName();
     }
 
     @Override
     public String getFailureInfo() throws IOException {
-      return null;
+      // This function is assumed to be called right after realization of job
+      // failure. As such, RPC calls are avoided (eg. not calling updateStatus).
+      ensureFreshStatus();
+      return status.getFailureInfo();
     }
 
     @Override
     public WorkflowStatus getWorkflowStatus() throws IOException {
-      return null;
+      // TODO: function not called yet in the code.
+      updateStatus();
+      return status;
+    }
+
+    // Some methods rely on having a recent {@link WorkflowStatus} object.
+    private synchronized void ensureFreshStatus() throws IOException {
+      if (System.currentTimeMillis() - statusTime > MAX_WORKFLOWPROFILE_AGE) {
+        updateStatus();
+      }
+    }
+
+    // Some methods require the current {@link WorkflowStatus} object.
+    private synchronized void updateStatus() throws IOException {
+      status = workflowSubmitClient.getWorkflowStatus(profile.getWorkflowId());
+      if (status == null) {
+        throw new IOException("The Workflow appears to have been removed.");
+      }
+      statusTime = System.currentTimeMillis();
     }
 
   }
 
   private static final Log LOG = LogFactory.getLog(WorkflowClient.class);
+
+  private static final long MAX_WORKFLOWPROFILE_AGE = 1000 * 2;  // 2 seconds.
 
   private WorkflowSubmissionProtocol rpcWorkflowSubmitClient;
   private WorkflowSubmissionProtocol workflowSubmitClient;
@@ -301,12 +339,9 @@ public class WorkflowClient extends Configured {
         // Generate the scheduling plan. Needs to provide:
         // - ordering of tasks to be executed
         // - pairing, each task to a machine type
-        workflowCopy.generatePlan(machineTypes, machines, table);
-
-        // TODO:
-        // Also need to somehow have each node know what type it is?
-        // - so that we can do task -> type -> actual
-        // -> or when node asks for task we can match it to it's type on server
+        if (!workflowCopy.generatePlan(machineTypes, machines, table)) {
+          throw new IOException("Workflow constraints are infeasible. Exiting.");
+        }
 
         // Write configuration into HDFS so that JobTracker can read it.
         copyAndConfigureFiles(workflowCopy, submitWorkflowDir);
@@ -323,6 +358,10 @@ public class WorkflowClient extends Configured {
         LOG.info("In WorkflowClient. Got WorkflowProfile back from JobTracker.");
 
         // TODO - how to split workflow in multiple jobs to run
+        // TODO:
+        // Also need to somehow have each node know what type it is?
+        // - so that we can do task -> type -> actual
+        // -> or when node asks for task we can match it to it's type on server
 
         if (status != null && profile != null) {
           LOG.info("Done submitWorkflowInternal, returning.");

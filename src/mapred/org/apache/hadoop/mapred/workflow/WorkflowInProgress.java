@@ -48,7 +48,8 @@ public class WorkflowInProgress {
 
     this.workflowId = workflowInfo.getWorkflowId();
     this.status = new WorkflowStatus(workflowId);
-    this.profile = new WorkflowProfile(workflowId);
+    this.profile =
+        new WorkflowProfile(workflowId, workflowConf.getWorkflowName());
   }
 
   public WorkflowStatus getStatus() {

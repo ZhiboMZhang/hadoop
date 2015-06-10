@@ -46,6 +46,8 @@ public class FifoSchedulingPlan extends SchedulingPlan {
 
   private static final Log LOG = LogFactory.getLog(FifoSchedulingPlan.class);
 
+  private List<WorkflowNodeMachineTypePair> taskMapping;
+
   // We can assume that all tasks have the same execution time (which is given).
   // Priorities list keeps a list of WorkflowNodes.
   // (corresponding to TASKS, not stages).
@@ -186,22 +188,15 @@ public class FifoSchedulingPlan extends SchedulingPlan {
     // Our scheduling plan is a list of WorkflowNodes (stages), each of which
     // is paired to a machine. Since tasks are 'the same', a WorkflowNode in
     // this case represents a task to be executed (WorkflowNodes are repeated).
-    List<WorkflowNodeMachineTypePair> taskMapping =
-        new ArrayList<WorkflowNodeMachineTypePair>();
+    taskMapping = new ArrayList<WorkflowNodeMachineTypePair>();
     List<WorkflowNode> ordering = workflowDag.getTopologicalOrdering();
-    WorkflowNodeMachineTypePair pair;
 
     for (WorkflowNode node : ordering) {
       for (int task = 0; task < node.getNumTasks(); task++) {
-        String type = node.getMachineType(task);
-        pair = new WorkflowNodeMachineTypePair(node, machineType.get(type));
-        taskMapping.add(pair);
+        MachineType type = machineType.get(node.getMachineType(task));
+        LOG.info("Added pair: " + node.getName() + " to " + type.getName());
+        taskMapping.add(new WorkflowNodeMachineTypePair(node, type));
       }
-    }
-    LOG.info("Created task mapping.");
-    for (WorkflowNodeMachineTypePair p : taskMapping) {
-      LOG.info("Pair maps " + p.workflowNode.getName() + " to "
-          + p.machineType.getName());
     }
 
     // Because our model assumes an unconstrained scheduling (unlimited

@@ -20,8 +20,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
 /**
@@ -29,9 +28,8 @@ import org.apache.hadoop.io.Writable;
  */
 public class WorkflowStatus implements Writable {
 
-  private static final Log LOG = LogFactory.getLog(WorkflowStatus.class);
-
   private WorkflowID workflowId;
+  private String failureInfo = "NA";
 
   // Required for readFields()/reflection when building the object.
   public WorkflowStatus() {}
@@ -40,16 +38,37 @@ public class WorkflowStatus implements Writable {
     this.workflowId = workflowId;
   }
 
+  /**
+   * Gets any available information regarding the reason of job failure.
+   *
+   * @return A string containing diagnostic information on job failure.
+   */
+  public synchronized String getFailureInfo() {
+    // TODO: ? call to get failure info of current job.
+    return failureInfo;
+  }
+
+  /**
+   * Set the information regarding the reason of job failure.
+   *
+   * @param failureInfo A string containing diagnostic information on job
+   *          failure.
+   */
+  public synchronized void setFailureInfo(String failureInfo) {
+    this.failureInfo = failureInfo;
+  }
+
   @Override
   public void write(DataOutput out) throws IOException {
     workflowId.write(out);
+    Text.writeString(out, failureInfo);
   }
 
   @Override
   public void readFields(DataInput in) throws IOException {
-
     workflowId = new WorkflowID();
     workflowId.readFields(in);
+    failureInfo = Text.readString(in);
   }
 
 }

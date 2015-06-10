@@ -3587,11 +3587,11 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
       throws IOException {
     checkJobTrackerState();
 
-    LOG.info("In JobTracker getWorkflowStatus, getting WorkflowProfile.");
+    LOG.info("In JobTracker getWorkflowStatus, getting WorkflowStatus.");
 
     if (workflowId == null) {
       LOG.warn("JobTracker.getWorkflowStatus();"
-          + " cannot get status for null workflowId);");
+          + " cannot get status for null WorkflowID.");
       return null;
     }
 
@@ -3695,7 +3695,9 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
       status = addWorkflow(workflowId, workflow);
     } catch (IOException ioe) {
       LOG.info("Workflow " + workflowId + " submission failed!", ioe);
-      // TODO
+      status = workflow.getStatus();
+      status.setFailureInfo(StringUtils.stringifyException(ioe));
+      // failWorkflow(workflow);
       throw ioe;
     }
 
