@@ -36,7 +36,7 @@ import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
-import org.apache.hadoop.mapred.workflow.schedulers.WorkflowUtil.Pair;
+import org.apache.hadoop.mapred.workflow.schedulers.WorkflowUtil.WorkflowNodeMachineTypePair;
 
 /**
  * A basic workflow scheduling plan, schedules jobs & their tasks in a first-in
@@ -186,21 +186,22 @@ public class FifoSchedulingPlan extends SchedulingPlan {
     // Our scheduling plan is a list of WorkflowNodes (stages), each of which
     // is paired to a machine. Since tasks are 'the same', a WorkflowNode in
     // this case represents a task to be executed (WorkflowNodes are repeated).
-    List<Pair<WorkflowNode, MachineType>> taskMapping;
-    taskMapping = new ArrayList<Pair<WorkflowNode, MachineType>>();
+    List<WorkflowNodeMachineTypePair> taskMapping =
+        new ArrayList<WorkflowNodeMachineTypePair>();
     List<WorkflowNode> ordering = workflowDag.getTopologicalOrdering();
-    Pair<WorkflowNode, MachineType> pair;
+    WorkflowNodeMachineTypePair pair;
 
     for (WorkflowNode node : ordering) {
       for (int task = 0; task < node.getNumTasks(); task++) {
         String type = node.getMachineType(task);
-        pair = new Pair<WorkflowNode, MachineType>(node, machineType.get(type));
+        pair = new WorkflowNodeMachineTypePair(node, machineType.get(type));
         taskMapping.add(pair);
       }
     }
     LOG.info("Created task mapping.");
-    for (Pair<WorkflowNode, MachineType> p : taskMapping) {
-      LOG.info("Pair maps " + p.from.getName() + " to " + p.to.getName());
+    for (WorkflowNodeMachineTypePair p : taskMapping) {
+      LOG.info("Pair maps " + p.workflowNode.getName() + " to "
+          + p.machineType.getName());
     }
 
     // Because our model assumes an unconstrained scheduling (unlimited

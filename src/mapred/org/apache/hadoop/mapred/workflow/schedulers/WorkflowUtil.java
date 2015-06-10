@@ -32,17 +32,15 @@ import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 
 public class WorkflowUtil {
   
-  /**
-   * A generic Pair class.
-   */
-  public static class Pair<S, T> {
+  public static class WorkflowNodeMachineTypePair {
 
-    S from;
-    T to;
+    WorkflowNode workflowNode;
+    MachineType machineType;
 
-    public Pair(S from, T to) {
-      this.from = from;
-      this.to = to;
+    public WorkflowNodeMachineTypePair(WorkflowNode node,
+        MachineType machineType) {
+      this.workflowNode = node;
+      this.machineType = machineType;
     }
   }
 
@@ -102,10 +100,10 @@ public class WorkflowUtil {
     return resourcePairings;
   }
 
-  // TODO: is there a better way to match machine types to real machines?
 
   // Get some measure of distance between a MachineType and a ResourceStatus.
   // A lower distance means that the two are more similar.
+  // TODO: is there a better way to match machine types to real machines?
   private static float calculateDistance(MachineType type, ResourceStatus status) {
 
     float cpu = Math.abs(type.getCpuFrequency() - status.getCpuFrequency());
