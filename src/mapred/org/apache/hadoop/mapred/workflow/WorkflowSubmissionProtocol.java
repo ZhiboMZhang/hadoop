@@ -18,17 +18,17 @@ package org.apache.hadoop.mapred.workflow;
 
 import java.io.IOException;
 
-import org.apache.hadoop.ipc.VersionedProtocol;
 import org.apache.hadoop.mapred.ClusterStatus;
 import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.JobTracker;
+import org.apache.hadoop.mapred.workflow.schedulers.WorkflowSchedulingProtocol;
 
 /**
  * Protocol that a {@link WorkflowClient} and the {@link JobTracker} use to
  * communicate. The {@link WorkflowClient} can use these methods to submit a
  * Workflow for execution, and learn about the current system status.
  */
-public interface WorkflowSubmissionProtocol extends VersionedProtocol {
+public interface WorkflowSubmissionProtocol extends WorkflowSchedulingProtocol {
 
   public static long versionID = 1L;
 
@@ -37,13 +37,14 @@ public interface WorkflowSubmissionProtocol extends VersionedProtocol {
    * for the workflow. Note that workflow files should be submitted in the
    * <code>workflowSubmitDir</code>.
    *
-   * @param workflowId
-   * @param workflowSubmitDir
+   * @param workflowId The {@link WorkflowID} corresponding to the submitted
+   *          workflow.
+   * @param workflowSubmitDir The directory for workflow submission to take
+   *          place.
    *
    * @return A WorkflowStatus referencing the submitted workflow.
    * @throws IOException
    */
-  // TODO: Update JavaDoc.
   public WorkflowStatus submitWorkflow(WorkflowID workflowId,
       String workflowSubmitDir) throws IOException;
 

@@ -58,6 +58,13 @@ public class WorkflowStatus implements Writable {
     this.failureInfo = failureInfo;
   }
 
+  /**
+   * Return the {@link WorkflowID} of the workflow.
+   */
+  public WorkflowID getWorkflowId() {
+    return workflowId;
+  }
+
   @Override
   public void write(DataOutput out) throws IOException {
     workflowId.write(out);

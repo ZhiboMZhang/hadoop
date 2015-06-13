@@ -17,51 +17,70 @@
 package org.apache.hadoop.mapred.workflow.schedulers;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.mapred.JobChangeEvent;
+import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.JobInProgress;
 import org.apache.hadoop.mapred.JobInProgressListener;
 import org.apache.hadoop.mapred.workflow.WorkflowChangeEvent;
+import org.apache.hadoop.mapred.workflow.WorkflowID;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgressListener;
-import org.apache.hadoop.mapred.JobChangeEvent;
 
 public class FifoWorkflowListener extends JobInProgressListener implements
     WorkflowInProgressListener {
 
+  private static class SchedulingInfo {
+
+  }
+
+  private static final Log LOG = LogFactory.getLog(FifoWorkflowListener.class);
+
+  private Map<JobID, JobInProgress> jobs;
+  private Map<WorkflowID, WorkflowInProgress> workflows;
+
+  // A queue to hold both jobs and workflows in progress.
+  private Map<SchedulingInfo, Object> queue;
+
+  public FifoWorkflowListener() {
+    LOG.info("In constructor.");
+    jobs = new HashMap<JobID, JobInProgress>();
+    workflows = new HashMap<WorkflowID, WorkflowInProgress>();
+    queue = new HashMap<SchedulingInfo, Object>();
+  }
+
   @Override
   public void workflowAdded(WorkflowInProgress workflow) throws IOException {
-    // TODO Auto-generated method stub
-
+    LOG.info("In workflowAdded function.");
   }
 
   @Override
   public void workflowRemoved(WorkflowInProgress workflow) {
-    // TODO Auto-generated method stub
-
+    LOG.info("In workflowRemoved function.");
   }
 
   @Override
   public void workflowUpdated(WorkflowChangeEvent event) {
-    // TODO Auto-generated method stub
-
+    LOG.info("In workflowUpdated function.");
   }
 
   @Override
   public void jobAdded(JobInProgress job) throws IOException {
-    // TODO Auto-generated method stub
-
+    LOG.info("In jobAdded function.");
   }
 
   @Override
   public void jobRemoved(JobInProgress job) {
-    // TODO Auto-generated method stub
-
+    LOG.info("In jobRemoved function.");
   }
 
   @Override
   public void jobUpdated(JobChangeEvent event) {
-    // TODO Auto-generated method stub
-
+    LOG.info("In jobUpdated function.");
   }
 
 }

@@ -339,9 +339,12 @@ public class WorkflowClient extends Configured {
         // Generate the scheduling plan. Needs to provide:
         // - ordering of tasks to be executed
         // - pairing, each task to a machine type
-        if (!workflowCopy.generatePlan(machineTypes, machines, table)) {
+        SchedulingPlan plan = workflowCopy.getSchedulingPlan();
+        if (!plan.generatePlan(machineTypes, machines, table, workflowCopy)) {
           throw new IOException("Workflow constraints are infeasible. Exiting.");
         }
+
+        workflowSubmitClient.setWorkflowSchedulingPlan(plan);
 
         // Write configuration into HDFS so that JobTracker can read it.
         copyAndConfigureFiles(workflowCopy, submitWorkflowDir);
@@ -621,6 +624,6 @@ public class WorkflowClient extends Configured {
   private boolean monitorAndPrintWorkflow(WorkflowConf conf,
       RunningWorkflow workflow) throws IOException, InterruptedException {
     // TODO
-    return false;
+    return true;
   }
 }

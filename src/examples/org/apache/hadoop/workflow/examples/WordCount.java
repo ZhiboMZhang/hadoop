@@ -22,7 +22,6 @@ import org.apache.hadoop.mapred.FileOutputFormat;
 import org.apache.hadoop.mapred.workflow.WorkflowClient;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
-import org.apache.hadoop.mapred.workflow.schedulers.FifoSchedulingPlan;
 
 public class WordCount {
 
@@ -39,11 +38,9 @@ public class WordCount {
     workflowConf.setConstraint(Constraints.DEADLINE, "600s");
 
     // Specify jobs in the workflow.
-    workflowConf.addJob("WordCount", "wordcount.jar",
-        "org.apache.examples.WordCount");
-
-    // Also set the scheduler/scheduling plan.
-    workflowConf.setSchedulerClass(FifoSchedulingPlan.class);
+    workflowConf.addJob("WordCount", "wordcount.jar");
+    workflowConf.setJobParameters("WordCount",
+        "org.apache.hadoop.examples.WordCount /wc-input /wc-out");
 
     // Also specify the input dataset.
     FileInputFormat.setInputPaths(workflowConf, new Path(args[0]));

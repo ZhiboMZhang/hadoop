@@ -16,31 +16,54 @@
  */
 package org.apache.hadoop.mapred.workflow.schedulers;
 
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.MachineType;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
+import org.apache.hadoop.mapred.workflow.WorkflowConf;
+import org.apache.hadoop.mapred.workflow.WorkflowConf.JobInfo;
+import org.apache.hadoop.mapred.workflow.WorkflowID;
+import org.apache.hadoop.mapred.workflow.WorkflowStatus;
 
 public class WorkflowUtil {
-  
-  public static class WorkflowNodeMachineTypePair {
 
-    WorkflowNode workflowNode;
-    MachineType machineType;
+  public static class MachineTypeJobNamePair implements Writable {
+    String machineType;
+    String jobName;
 
-    public WorkflowNodeMachineTypePair(WorkflowNode node,
-        MachineType machineType) {
-      this.workflowNode = node;
+    /**
+     * Only to be used when calling readFields afterwards.
+     */
+    public MachineTypeJobNamePair() {}
+
+    public MachineTypeJobNamePair(String machineType, String jobName) {
       this.machineType = machineType;
+      this.jobName = jobName;
+    }
+
+    @Override
+    public void write(DataOutput out) throws IOException {
+      Text.writeString(out, jobName);
+      Text.writeString(out, machineType);
+    }
+
+    @Override
+    public void readFields(DataInput in) throws IOException {
+      jobName = Text.readString(in);
+      machineType = Text.readString(in);
     }
   }
 
@@ -63,38 +86,34 @@ public class WorkflowUtil {
       };
 
   /**
-   * Pair up machine types to actual available resources in the cluster. If
-   * resources do not exactly match a certain machine, they are paired to the
-   * closest one.
-   * 
+   * Pair up machine types with actual resources in the cluster. If resources do
+   * not exactly match a certain machine, they are paired with the closest one.
+   *
    * @param machineTypes A set of machine types.
-   * @param machines A map of machine names to their {@link ResourceStatus}.
+   * @param machines A map of machine type names to {@link ResourceStatus} info.
+   *
+   * @return A map of machine names to a machine type names.
    */
-  public static Map<MachineType, Set<ResourceStatus>> matchResourceTypes(
+  // TODO: test
+  public static Map<String, String> matchResourceTypes(
       Set<MachineType> machineTypes, Map<String, ResourceStatus> machines) {
 
-    Map<MachineType, Set<ResourceStatus>> resourcePairings;
-    resourcePairings = new HashMap<MachineType, Set<ResourceStatus>>();
+    Map<String, String> resourcePairings = new HashMap<String, String>();
 
     for (String machine : machines.keySet()) {
       ResourceStatus resourceStatus = machines.get(machine);
-      MachineType closestType = null;
+      String closestType = null;
       float distance = Float.MAX_VALUE;
 
       for (MachineType type : machineTypes) {
         float newDistance = calculateDistance(type, resourceStatus);
         if (newDistance <= distance) {
           distance = newDistance;
-          closestType = type;
+          closestType = type.getName();
         }
       }
 
-      Set<ResourceStatus> resources = resourcePairings.get(closestType);
-      if (resources == null) {
-        resources = new HashSet<ResourceStatus>();
-        resourcePairings.put(closestType, resources);
-      }
-      resources.add(resourceStatus);
+      resourcePairings.put(machine, closestType);
     }
 
     return resourcePairings;

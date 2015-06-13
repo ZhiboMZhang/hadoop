@@ -75,6 +75,7 @@ import org.apache.hadoop.mapred.JobInProgress.KillInterruptedException;
 import org.apache.hadoop.mapred.JobStatusChangeEvent.EventType;
 import org.apache.hadoop.mapred.QueueManager.QueueACL;
 import org.apache.hadoop.mapred.TaskTrackerStatus.TaskTrackerHealthStatus;
+import org.apache.hadoop.mapred.workflow.SchedulingPlan;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowID;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
@@ -84,6 +85,7 @@ import org.apache.hadoop.mapred.workflow.WorkflowProfile;
 import org.apache.hadoop.mapred.workflow.WorkflowStatus;
 import org.apache.hadoop.mapred.workflow.WorkflowSubmissionFiles;
 import org.apache.hadoop.mapred.workflow.WorkflowSubmissionProtocol;
+import org.apache.hadoop.mapred.workflow.schedulers.WorkflowScheduler;
 import org.apache.hadoop.mapreduce.ClusterMetrics;
 import org.apache.hadoop.mapreduce.TaskType;
 import org.apache.hadoop.mapreduce.security.TokenCache;
@@ -329,6 +331,12 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
       try {
         result = new JobTracker(conf, identifier);
         result.taskScheduler.setTaskTrackerManager(result);
+
+        if (result.taskScheduler instanceof WorkflowScheduler) {
+          ((WorkflowScheduler) result.taskScheduler)
+              .setWorkflowSchedulingProtocol(result);
+        }
+
         break;
       } catch (VersionMismatch e) {
         throw e;
@@ -3552,6 +3560,17 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
   // //////////////////////////////////////////////////
   // WorkflowSubmissionProtocol
   // //////////////////////////////////////////////////
+
+  // TODO: WORKFLOW
+  private SchedulingPlan schedulingPlan = null;
+
+  public void setWorkflowSchedulingPlan(SchedulingPlan schedulingPlan) {
+    this.schedulingPlan = schedulingPlan;
+  }
+
+  public SchedulingPlan getWorkflowSchedulingPlan() {
+    return schedulingPlan;
+  }
 
   public synchronized WorkflowID getNewWorkflowId() throws IOException {
     checkJobTrackerState();

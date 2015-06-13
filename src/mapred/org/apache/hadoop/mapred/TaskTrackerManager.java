@@ -27,7 +27,7 @@ import org.apache.hadoop.mapred.workflow.WorkflowInProgressListener;
  * This interface exits primarily to test the {@link JobTracker}, and is not
  * intended to be implemented by users.
  */
-interface TaskTrackerManager {
+public interface TaskTrackerManager {
 
   /**
    * @return A collection of the {@link TaskTrackerStatus} for the tasktrackers

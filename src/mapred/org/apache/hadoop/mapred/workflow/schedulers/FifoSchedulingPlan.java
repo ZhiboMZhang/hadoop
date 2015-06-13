@@ -29,6 +29,7 @@ import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.MachineType;
 import org.apache.hadoop.mapred.workflow.SchedulingPlan;
@@ -36,7 +37,7 @@ import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
-import org.apache.hadoop.mapred.workflow.schedulers.WorkflowUtil.WorkflowNodeMachineTypePair;
+import org.apache.hadoop.mapred.workflow.schedulers.WorkflowUtil.MachineTypeJobNamePair;
 
 /**
  * A basic workflow scheduling plan, schedules jobs & their tasks in a first-in
@@ -46,17 +47,18 @@ public class FifoSchedulingPlan extends SchedulingPlan {
 
   private static final Log LOG = LogFactory.getLog(FifoSchedulingPlan.class);
 
-  private List<WorkflowNodeMachineTypePair> taskMapping;
+  private List<MachineTypeJobNamePair> taskMapping;
+  private Map<String, String> trackerMapping;
 
   // We can assume that all tasks have the same execution time (which is given).
   // Priorities list keeps a list of WorkflowNodes.
   // (corresponding to TASKS, not stages).
 
-  @Override
   /**
    * Plan generation in this case will return a basic scheduling, disregarding
    *  constraints.
    */
+  @Override
   public boolean generatePlan(Set<MachineType> machineTypes,
       Map<String, ResourceStatus> machines, Map<TableKey, TableEntry> table,
       WorkflowConf workflow) {
@@ -128,7 +130,6 @@ public class FifoSchedulingPlan extends SchedulingPlan {
                 + task);
             continue;
           }
-          LOG.info("Getting time for node " + node.getName() + ":" + task);
 
           String type = node.getMachineType(task);
           TableKey key = new TableKey(node.getJob(), type, node.isMapStage());
@@ -188,33 +189,78 @@ public class FifoSchedulingPlan extends SchedulingPlan {
     // Our scheduling plan is a list of WorkflowNodes (stages), each of which
     // is paired to a machine. Since tasks are 'the same', a WorkflowNode in
     // this case represents a task to be executed (WorkflowNodes are repeated).
-    taskMapping = new ArrayList<WorkflowNodeMachineTypePair>();
+
+    // TODO: rethink mapping -> what info is actually needed?
+    // -> might just need names as strings, wait to change though
+    // MachineTypeJobNamePair
+    taskMapping = new ArrayList<MachineTypeJobNamePair>();
     List<WorkflowNode> ordering = workflowDag.getTopologicalOrdering();
 
     for (WorkflowNode node : ordering) {
       for (int task = 0; task < node.getNumTasks(); task++) {
         MachineType type = machineType.get(node.getMachineType(task));
-        LOG.info("Added pair: " + node.getName() + " to " + type.getName());
-        taskMapping.add(new WorkflowNodeMachineTypePair(node, type));
+        taskMapping.add(new MachineTypeJobNamePair(
+            type.getName(), node.getName()));
+        LOG.info("Added pair: " + node.getName() + "/" + type.getName());
       }
     }
 
-    // Because our model assumes an unconstrained scheduling (unlimited
+    // Get a mapping between actual available machines and machine types.
+    trackerMapping = WorkflowUtil.matchResourceTypes(machineTypes, machines);
+
+    for (String type : trackerMapping.keySet()) {
+      LOG.info("Mapped machinetype " + type + " to " + trackerMapping.get(type));
+    }
+
+    // TODO: Because our model assumes an unconstrained scheduling (unlimited
     // resources), we need to convert the plan to an actual scheduling wrt/
-    // available cluster resources.
-    // TODO test / ???
-    Map<MachineType, Set<ResourceStatus>> typeToMachine;
-    typeToMachine = WorkflowUtil.matchResourceTypes(machineTypes, machines);
+    // available cluster resources. (???)
 
     return true;
   }
 
+  public List<MachineTypeJobNamePair> getTaskMapping() {
+    return taskMapping;
+  }
+
+  public Map<String, String> getTrackerMapping() {
+    return trackerMapping;
+  }
+
   @Override
   public void readFields(DataInput in) throws IOException {
+
+    taskMapping = new ArrayList<MachineTypeJobNamePair>();
+    int numTaskMappings = in.readInt();
+    for (int i = 0; i < numTaskMappings; i++) {
+      MachineTypeJobNamePair pair = new MachineTypeJobNamePair();
+      pair.readFields(in);
+      taskMapping.add(pair);
+    }
+
+    trackerMapping = new HashMap<String, String>();
+    int numTrackerMappings = in.readInt();
+    for (int i = 0; i < numTrackerMappings; i++) {
+      String key = Text.readString(in);
+      String value = Text.readString(in);
+      trackerMapping.put(key, value);
+    }
   }
 
   @Override
   public void write(DataOutput out) throws IOException {
+
+    int numTaskMappings = taskMapping.size();
+    out.writeInt(numTaskMappings);
+    for (int i = 0; i < numTaskMappings; i++) {
+      taskMapping.get(i).write(out);
+    }
+
+    out.writeInt(trackerMapping.size());
+    for (String key : trackerMapping.keySet()) {
+      Text.writeString(out, key);
+      Text.writeString(out, trackerMapping.get(key));
+    }
   }
 
 }

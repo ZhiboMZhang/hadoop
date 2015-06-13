@@ -112,29 +112,13 @@ public class WorkflowConf extends Configuration implements Writable {
     setJarByClass(exampleClass);
 
     // Load the specified scheduling plan
-    Class<? extends SchedulingPlan> schedulingPlanClass =
+    Class<? extends SchedulingPlan> clazz =
         this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, FifoSchedulingPlan.class,
             SchedulingPlan.class);
-    setSchedulerClasses(schedulingPlanClass);
+    schedulingPlan = (SchedulingPlan) ReflectionUtils.newInstance(clazz, this);
+    LOG.info("Created new schedulingPlan: " + schedulingPlan.toString());;
   }
 
-  /**
-   * Set the {@link SchedulingPlan} to be used for the workflow.
-   *
-   * @param clazz The class to use for scheduling the workflow.
-   */
-  public void setSchedulerClass(Class<? extends SchedulingPlan> clazz) {
-    setSchedulerClasses(clazz);
-  }
-
-  // TODO
-  private void setSchedulerClasses(Class<? extends SchedulingPlan> clazz) {
-    this.schedulingPlan =
-        (SchedulingPlan) ReflectionUtils.newInstance(clazz, this);
-    // Idea is currently to link the scheduler and schedulingplan together.
-    // So that by specifying one in the configuration all are loaded.
-  }
-  
   /**
    * Return the {@link JobInfo jobs} which comprise the workflow.
    */
@@ -171,6 +155,10 @@ public class WorkflowConf extends Configuration implements Writable {
     return schedulingPlan.generatePlan(machineTypes, machines, table, this);
   }
 
+  public SchedulingPlan getSchedulingPlan() {
+    return schedulingPlan;
+  }
+
   /**
    * Add a map-reduce job to the list of jobs to be executed in the workflow.
    * Each job is identified by a name, and includes a jar file and parameters.
@@ -181,7 +169,7 @@ public class WorkflowConf extends Configuration implements Writable {
    * @param name A unique identifier for the job to be executed.
    * @param jarName The path to the jar file belonging to the job.
    */
-  public void addJob(String name, String jarName, String parameters)
+  public void addJob(String name, String jarName)
       throws IOException {
 
     LOG.info("Adding job to workflow.");
@@ -197,11 +185,10 @@ public class WorkflowConf extends Configuration implements Writable {
       if (exists) {
         // Store contained jobs in JobInfo class as opposed to attributes.
         JobInfo job = new JobInfo();
-        job.parameters = parameters;
         job.jobConf = new JobConf();
         job.jobConf.setJar(jarName);
-
         jobs.put(name, job);
+
       } else {
         LOG.info("Error adding job: path '" + addedJarPath + "' doesn't exist.");
         throw new IOException("Error adding job: path '" + addedJarPath
@@ -212,6 +199,17 @@ public class WorkflowConf extends Configuration implements Writable {
       LOG.info("Error adding job to workflow.");
       throw new IOException("Error adding job to workflow. " + e);
     }
+  }
+
+  public void setJobParameters(String name, String parameters)
+      throws IOException {
+
+    JobInfo job = jobs.get(name);
+    if (null == job) {
+      throw new IOException("Cannot add parameters to job " + name
+          + ". Job does not exist");
+    }
+    job.parameters = parameters;
   }
 
   /**
@@ -393,10 +391,11 @@ public class WorkflowConf extends Configuration implements Writable {
     }
 
     // Read in other properties.
-    Class<? extends SchedulingPlan> schedulingPlanClass =
+    Class<? extends SchedulingPlan> clazz =
         this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, FifoSchedulingPlan.class,
             SchedulingPlan.class);
-    setSchedulerClasses(schedulingPlanClass);
+    schedulingPlan = (SchedulingPlan) ReflectionUtils.newInstance(clazz, this);
+    schedulingPlan.readFields(in);
   }
 
   @Override
