@@ -17,7 +17,9 @@
 package org.apache.hadoop.mapred.workflow.schedulers;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.apache.commons.logging.Log;
@@ -26,15 +28,118 @@ import org.apache.hadoop.mapred.JobChangeEvent;
 import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.JobInProgress;
 import org.apache.hadoop.mapred.JobInProgressListener;
+import org.apache.hadoop.mapred.JobPriority;
+import org.apache.hadoop.mapred.JobStatus;
+import org.apache.hadoop.mapred.JobStatusChangeEvent;
+import org.apache.hadoop.mapred.JobStatusChangeEvent.EventType;
 import org.apache.hadoop.mapred.workflow.WorkflowChangeEvent;
 import org.apache.hadoop.mapred.workflow.WorkflowID;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgressListener;
+import org.apache.hadoop.mapred.workflow.WorkflowStatus;
 
 public class FifoWorkflowListener extends JobInProgressListener implements
     WorkflowInProgressListener {
 
   private static class SchedulingInfo {
+    private long startTime;
+
+    public SchedulingInfo(long startTime) {
+      this.startTime = startTime;
+    }
+
+    public long getStartTime() {
+      return startTime;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+      if (null == object || object.getClass() != SchedulingInfo.class) {
+        return false;
+      } else if (this == object) {
+        return true;
+      } else if (object instanceof SchedulingInfo) {
+        SchedulingInfo other = (SchedulingInfo) object;
+        return (startTime == other.startTime);
+      }
+
+      return false;
+    }
+  }
+
+  // See JobQueueJobInProgressListener
+  private static class JobSchedulingInfo extends SchedulingInfo {
+    private JobPriority priority;
+    private JobID id;
+
+    public JobSchedulingInfo(JobStatus status) {
+      super(status.getStartTime());
+      priority = status.getJobPriority();
+      id = status.getJobID();
+    }
+
+    public JobPriority getPriority() {
+      return priority;
+    }
+
+    public JobID getJobId() {
+      return id;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+      if (!super.equals(object)) { return false; }
+      if (object == null || object.getClass() != JobSchedulingInfo.class) {
+        return false;
+      } else if (object == this) {
+        return true;
+      } else if (object instanceof JobSchedulingInfo) {
+        JobSchedulingInfo other = (JobSchedulingInfo) object;
+        return (id.equals(other.id) && priority == other.priority);
+      }
+
+      return false;
+    }
+
+    @Override
+    public int hashCode() {
+      return (int) (id.hashCode() * priority.hashCode() + getStartTime());
+    }
+  }
+
+  private static class WorkflowSchedulingInfo extends SchedulingInfo {
+    private WorkflowID id;
+
+    public WorkflowSchedulingInfo(WorkflowStatus status) {
+      super(status.getSubmissionTime());
+      id = status.getWorkflowId();
+    }
+
+    public WorkflowID getWorkflowId() {
+      return id;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+      if (!super.equals(object)) {
+        return false;
+      }
+      if (object == null || object.getClass() != WorkflowSchedulingInfo.class) {
+        return false;
+      } else if (object == this) {
+        return true;
+      } else if (object instanceof WorkflowSchedulingInfo) {
+        WorkflowSchedulingInfo other = (WorkflowSchedulingInfo) object;
+        return (id.equals(other.id));
+      }
+
+      return false;
+    }
+
+    @Override
+    public int hashCode() {
+      return (int) (id.hashCode() + getStartTime());
+    }
 
   }
 
@@ -47,25 +152,36 @@ public class FifoWorkflowListener extends JobInProgressListener implements
   private Map<SchedulingInfo, Object> queue;
 
   public FifoWorkflowListener() {
-    LOG.info("In constructor.");
     jobs = new HashMap<JobID, JobInProgress>();
-    workflows = new HashMap<WorkflowID, WorkflowInProgress>();
+    workflows = new LinkedHashMap<WorkflowID, WorkflowInProgress>();
     queue = new HashMap<SchedulingInfo, Object>();
+  }
+
+  /**
+   * @return A collection of JobInProgress/WorkflowInProgress objects.
+   */
+  public Collection<Object> getQueue() {
+    return queue.values();
   }
 
   @Override
   public void workflowAdded(WorkflowInProgress workflow) throws IOException {
-    LOG.info("In workflowAdded function.");
+    // Keep a list of workflows to be executed.
+    WorkflowID workflowId = workflow.getProfile().getWorkflowId();
+    workflows.put(workflowId, workflow);
+    queue.put(new WorkflowSchedulingInfo(workflow.getStatus()), workflow);
+
+    LOG.info("Added workflow " + workflowId + " to queue.");
   }
 
   @Override
   public void workflowRemoved(WorkflowInProgress workflow) {
-    LOG.info("In workflowRemoved function.");
+    // Workflow will be removed once it completes.
   }
 
   @Override
   public void workflowUpdated(WorkflowChangeEvent event) {
-    LOG.info("In workflowUpdated function.");
+    // Workflow updating currently not handled.
   }
 
   @Override
@@ -75,7 +191,7 @@ public class FifoWorkflowListener extends JobInProgressListener implements
 
   @Override
   public void jobRemoved(JobInProgress job) {
-    LOG.info("In jobRemoved function.");
+    // Job will be removed once it completes.
   }
 
   @Override

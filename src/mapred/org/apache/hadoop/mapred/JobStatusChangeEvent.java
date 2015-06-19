@@ -25,9 +25,11 @@ package org.apache.hadoop.mapred;
  *   - priority
  * Note that job times can change as the job can get restarted.
  */
-class JobStatusChangeEvent extends JobChangeEvent {
+public class JobStatusChangeEvent extends JobChangeEvent {
   // Events in job status that can lead to a job-status change
-  static enum EventType {RUN_STATE_CHANGED, START_TIME_CHANGED, PRIORITY_CHANGED}
+  public static enum EventType {
+    RUN_STATE_CHANGED, START_TIME_CHANGED, PRIORITY_CHANGED
+  }
   
   private JobStatus oldStatus;
   private JobStatus newStatus;
@@ -54,21 +56,21 @@ class JobStatusChangeEvent extends JobChangeEvent {
   /**
    * Returns a event-type that caused the state change
    */
-  EventType getEventType() {
+  public EventType getEventType() {
     return eventType;
   }
   
   /**
    * Get the old job status
    */
-  JobStatus getOldStatus() {
+  public JobStatus getOldStatus() {
     return oldStatus;
   }
   
   /**
    * Get the new job status as a result of the events
    */
-  JobStatus getNewStatus() {
+  public JobStatus getNewStatus() {
     return newStatus;
   }
 }

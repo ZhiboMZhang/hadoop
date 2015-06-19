@@ -1994,7 +1994,7 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
       = conf.getClass("mapred.jobtracker.taskScheduler",
           JobQueueTaskScheduler.class, TaskScheduler.class);
     taskScheduler = (TaskScheduler) ReflectionUtils.newInstance(schedulerClass, conf);
-    
+
     // Set service-level authorization security policy
     if (conf.getBoolean(
           ServiceAuthorizationManager.SERVICE_AUTHORIZATION_CONFIG, false)) {
@@ -3733,7 +3733,6 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
    * @param workflow The WorkflowInProgress object corresponding to the
    *          submitted workflow.
    */
-  // TODO: what are the workflowInProgressListeners?
   private synchronized WorkflowStatus addWorkflow(WorkflowID workflowId,
       WorkflowInProgress workflow)
       throws IOException {

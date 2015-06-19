@@ -62,8 +62,9 @@ public class WorkflowConf extends Configuration implements Writable {
 
     public JobConf jobConf;
     public JobID jobId;
-    public String parameters;
 
+    public String parameters;
+    public String mainClass;
     public int numMaps;
     public int numReduces;
 
@@ -71,10 +72,9 @@ public class WorkflowConf extends Configuration implements Writable {
     public void readFields(DataInput in) throws IOException {
       jobConf = new JobConf();
       jobConf.readFields(in);
-
       jobId = new JobID();
       jobId.readFields(in);
-
+      mainClass = Text.readString(in);
       parameters = Text.readString(in);
       numMaps = in.readInt();
       numReduces = in.readInt();
@@ -84,6 +84,7 @@ public class WorkflowConf extends Configuration implements Writable {
     public void write(DataOutput out) throws IOException {
       jobConf.write(out);
       jobId.write(out);
+      Text.writeString(out, mainClass);
       Text.writeString(out, parameters);
       out.writeInt(numMaps);
       out.writeInt(numReduces);
@@ -162,10 +163,10 @@ public class WorkflowConf extends Configuration implements Writable {
   /**
    * Add a map-reduce job to the list of jobs to be executed in the workflow.
    * Each job is identified by a name, and includes a jar file and parameters.
-   * 
+   *
    * Job jar files are assumed to be located in the same directory as the
    * Workflow jar file.
-   * 
+   *
    * @param name A unique identifier for the job to be executed.
    * @param jarName The path to the jar file belonging to the job.
    */
@@ -201,6 +202,13 @@ public class WorkflowConf extends Configuration implements Writable {
     }
   }
 
+  /**
+   * Set the workflow job's command-line parameters.
+   *
+   * @param name The name of the workflow job.
+   * @param parameters The parameters.
+   * @throws IOException
+   */
   public void setJobParameters(String name, String parameters)
       throws IOException {
 
@@ -210,6 +218,22 @@ public class WorkflowConf extends Configuration implements Writable {
           + ". Job does not exist");
     }
     job.parameters = parameters;
+  }
+
+  /**
+   * Set the workflow job's main class.
+   *
+   * @param name The name of the workflow job.
+   * @param mainClass The job's main class.
+   * @throws IOException
+   */
+  public void setJobMainClass(String name, String mainClass) throws IOException {
+    JobInfo job = jobs.get(name);
+    if (null == job) {
+      throw new IOException("Cannot add main class to job " + name
+          + ". Job does not exist.");
+    }
+    job.mainClass = mainClass;
   }
 
   /**

@@ -190,9 +190,7 @@ public class FifoSchedulingPlan extends SchedulingPlan {
     // is paired to a machine. Since tasks are 'the same', a WorkflowNode in
     // this case represents a task to be executed (WorkflowNodes are repeated).
 
-    // TODO: rethink mapping -> what info is actually needed?
-    // -> might just need names as strings, wait to change though
-    // MachineTypeJobNamePair
+    // TODO: rethink mapping -> what info is actually needed? (relevant still?)
     taskMapping = new ArrayList<MachineTypeJobNamePair>();
     List<WorkflowNode> ordering = workflowDag.getTopologicalOrdering();
 

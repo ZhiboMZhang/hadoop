@@ -27,6 +27,8 @@ import org.apache.hadoop.mapred.JobInProgress;
 import org.apache.hadoop.mapred.Task;
 import org.apache.hadoop.mapred.TaskScheduler;
 import org.apache.hadoop.mapred.workflow.SchedulingPlan;
+import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
+import org.apache.hadoop.mapred.workflow.WorkflowStatus.RunState;
 import org.apache.hadoop.mapred.workflow.schedulers.WorkflowUtil.MachineTypeJobNamePair;
 import org.apache.hadoop.mapreduce.server.jobtracker.TaskTracker;
 
@@ -71,24 +73,25 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
   @Override
   // Called from JobTracker heartbeat function, which is called by a taskTracker
   public List<Task> assignTasks(TaskTracker taskTracker) throws IOException {
-    LOG.info("In assignTasks method.");
 
     if (taskTrackerManager.isInSafeMode()) {
       LOG.info("JobTracker is in safe mode, not scheduling any tasks.");
       return null;
     }
 
+    List<MachineTypeJobNamePair> taskMapping = null;
+    Map<String, String> trackerMapping = null;
+
     if (schedulingPlan == null) {
       schedulingPlan = workflowSchedulingProtocol.getWorkflowSchedulingPlan();
       if (schedulingPlan == null) { return null; }
 
-      List<MachineTypeJobNamePair> taskMapping = schedulingPlan.getTaskMapping();
-      Map<String, String> trackerMapping = schedulingPlan.getTrackerMapping();
+      taskMapping = schedulingPlan.getTaskMapping();
+      trackerMapping = schedulingPlan.getTrackerMapping();
+    }
 
-      for (String type : trackerMapping.keySet()) {
-        LOG.info("Mapped machinetype " + type + " to "
-            + trackerMapping.get(type));
-      }
+    // Find out what the next job/workflow to be executed is.
+    Collection<Object> queue = fifoWorkflowListener.getQueue();
 
       for (MachineTypeJobNamePair pair : taskMapping) {
         LOG.info("Have pair " + pair.jobName + " to " + pair.machineType);
@@ -96,6 +99,7 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
 
     }
 
+    // TODO: what jobs to run concurrently?
     // Find out which tasktracker wants a task.
     // Match it with an available task.
     //LOG.info("Tracker " + taskTracker.getTrackerName() + " wants a task.");

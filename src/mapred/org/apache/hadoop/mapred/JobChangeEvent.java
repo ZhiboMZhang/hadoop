@@ -31,7 +31,7 @@ public abstract class JobChangeEvent {
   /**
    * Get the job object for which the change is reported
    */
-  JobInProgress getJobInProgress() {
+  public JobInProgress getJobInProgress() {
     return jip;
   }
 }

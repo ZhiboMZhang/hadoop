@@ -39,8 +39,7 @@ public class WordCount {
 
     // Specify jobs in the workflow.
     workflowConf.addJob("WordCount", "wordcount.jar");
-    workflowConf.setJobParameters("WordCount",
-        "org.apache.hadoop.examples.WordCount /wc-input /wc-out");
+    workflowConf.setJobMainClass("WordCount", "org.apache.hadoop.examples.WordCount");
 
     // Also specify the input dataset.
     FileInputFormat.setInputPaths(workflowConf, new Path(args[0]));

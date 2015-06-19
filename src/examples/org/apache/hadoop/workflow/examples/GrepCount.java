@@ -42,10 +42,10 @@ public class GrepCount {
     workflowConf.addJob("Grep", "grep.jar");
     workflowConf.addJob("WordCount", "wordcount.jar");
 
-    workflowConf.setJobParameters("Grep",
-        "org.apache.hadoop.examples.Grep search");
-    workflowConf.setJobParameters("WordCount",
-        "org.apache.hadoop.examples.WordCount /wc-input /wc-out");
+    workflowConf.setJobMainClass("Grep", "org.apache.hadoop.examples.Grep");
+    workflowConf.setJobParameters("Grep", "search");
+
+    workflowConf.setJobMainClass("WordCount", "org.apache.hadoop.examples.WordCount");
 
     // And we need to specify for each job its predecessors (if any).
     workflowConf.addDependency("WordCount", "Grep");

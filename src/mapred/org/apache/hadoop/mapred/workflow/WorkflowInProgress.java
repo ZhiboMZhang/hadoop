@@ -16,9 +16,18 @@
  */
 package org.apache.hadoop.mapred.workflow;
 
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.mapred.JobClient;
+import org.apache.hadoop.mapred.JobInProgress;
 import org.apache.hadoop.mapred.JobTracker;
+import org.apache.hadoop.mapred.workflow.WorkflowConf.JobInfo;
+import org.apache.hadoop.mapred.workflow.WorkflowStatus.RunState;
 
 /**
  * WorkflowInProgress maintains all the info for keeping a Workflow valid. It
@@ -42,14 +51,22 @@ public class WorkflowInProgress {
   private WorkflowProfile profile;
   private WorkflowStatus status;
   private WorkflowID workflowId;
+  private WorkflowConf workflowConf;
+
+  Set<JobInProgress> runningJobs;
+  Set<JobInProgress> completedJobs;
 
   public WorkflowInProgress(JobTracker jobTracker, WorkflowConf workflowConf,
       WorkflowInfo workflowInfo) {
 
-    this.workflowId = workflowInfo.getWorkflowId();
-    this.status = new WorkflowStatus(workflowId);
-    this.profile =
-        new WorkflowProfile(workflowId, workflowConf.getWorkflowName());
+    this.workflowConf = workflowConf;
+    workflowId = workflowInfo.getWorkflowId();
+    profile = new WorkflowProfile(workflowId, workflowConf.getWorkflowName());
+    status = new WorkflowStatus(workflowId);
+    status.setSubmissionTime(jobTracker.getClock().getTime());
+
+    runningJobs = new HashSet<JobInProgress>();
+    completedJobs = new HashSet<JobInProgress>();
   }
 
   public WorkflowStatus getStatus() {

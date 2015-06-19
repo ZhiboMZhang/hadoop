@@ -360,12 +360,6 @@ public class WorkflowClient extends Configured {
 
         LOG.info("In WorkflowClient. Got WorkflowProfile back from JobTracker.");
 
-        // TODO - how to split workflow in multiple jobs to run
-        // TODO:
-        // Also need to somehow have each node know what type it is?
-        // - so that we can do task -> type -> actual
-        // -> or when node asks for task we can match it to it's type on server
-
         if (status != null && profile != null) {
           LOG.info("Done submitWorkflowInternal, returning.");
           return new NetworkedWorkflow(status, profile, workflowSubmitClient);

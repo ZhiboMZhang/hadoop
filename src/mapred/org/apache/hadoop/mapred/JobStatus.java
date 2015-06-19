@@ -20,17 +20,16 @@ package org.apache.hadoop.mapred;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableFactories;
 import org.apache.hadoop.io.WritableFactory;
 import org.apache.hadoop.io.WritableUtils;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Map.Entry;
-
+import org.apache.hadoop.mapred.workflow.WorkflowID;
 import org.apache.hadoop.mapreduce.JobACL;
 import org.apache.hadoop.security.authorize.AccessControlList;
 
@@ -74,6 +73,8 @@ public class JobStatus implements Writable, Cloneable {
     return runStates[state];
   }
   
+  // TODO: when to set the workflowId.
+  private WorkflowID workflowId;
   private JobID jobid;
   private float mapProgress;
   private float reduceProgress;
@@ -156,6 +157,14 @@ public class JobStatus implements Writable, Cloneable {
      }
      priority = jp;
    }
+
+  /**
+   * @return The {@link WorkflowID} of the workflow this job belongs to, or null
+   *         if the job does not belong to a workflow.
+   */
+  public WorkflowID getWorkflowId() {
+    return workflowId;
+  }
 
   /**
    * @deprecated use getJobID instead

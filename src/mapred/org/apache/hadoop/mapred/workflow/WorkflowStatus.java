@@ -28,14 +28,51 @@ import org.apache.hadoop.io.Writable;
  */
 public class WorkflowStatus implements Writable {
 
+  public enum RunState {
+    PREP, SUBMITTED, RUNNING, SUCCEEDED, FAILED, KILLED
+  };
+
+  // Variables
   private WorkflowID workflowId;
+  private RunState runState = RunState.PREP;
   private String failureInfo = "NA";
+  private long submissionTime = -1;
 
   // Required for readFields()/reflection when building the object.
   public WorkflowStatus() {}
 
   public WorkflowStatus(WorkflowID workflowId) {
     this.workflowId = workflowId;
+  }
+
+  /**
+   * Get the run state of the workflow.
+   *
+   * @return The current run state of the workflow.
+   */
+  public RunState getRunState() {
+    return runState;
+  }
+
+  /**
+   * Get the submission time of the workflow.
+   *
+   * @return The submission time of the workflow.
+   */
+  public synchronized long getSubmissionTime() {
+    return submissionTime;
+  }
+
+  /**
+   * Set the submission time of the workflow.
+   *
+   * @param submissionTime The submission time to be set.
+   */
+  public synchronized void setSubmissionTime(long submissionTime) {
+    if (runState == RunState.PREP) {
+      this.submissionTime = submissionTime;
+      runState = RunState.SUBMITTED;
+    }
   }
 
   /**
@@ -69,6 +106,7 @@ public class WorkflowStatus implements Writable {
   public void write(DataOutput out) throws IOException {
     workflowId.write(out);
     Text.writeString(out, failureInfo);
+    out.writeLong(submissionTime);
   }
 
   @Override
@@ -76,6 +114,7 @@ public class WorkflowStatus implements Writable {
     workflowId = new WorkflowID();
     workflowId.readFields(in);
     failureInfo = Text.readString(in);
+    submissionTime = in.readLong();
   }
 
 }
