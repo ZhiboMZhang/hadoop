@@ -73,7 +73,6 @@ public class JobStatus implements Writable, Cloneable {
     return runStates[state];
   }
   
-  // TODO: when to set the workflowId.
   private WorkflowID workflowId;
   private JobID jobid;
   private float mapProgress;
@@ -164,6 +163,13 @@ public class JobStatus implements Writable, Cloneable {
    */
   public WorkflowID getWorkflowId() {
     return workflowId;
+  }
+
+  /**
+   * Set the WorkflowID of the JobStatus.
+   */
+  public void setWorkflowId(WorkflowID workflowId) {
+    this.workflowId = workflowId;
   }
 
   /**

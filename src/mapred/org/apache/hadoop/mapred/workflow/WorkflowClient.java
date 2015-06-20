@@ -329,7 +329,7 @@ public class WorkflowClient extends Configured {
         LOG.info("Loaded time-price table.");
 
         // Initialize/compute job information.
-        updateJobInfo(workflowCopy);
+        updateJobInfo(workflowCopy, workflowId);
         updateJobIoPaths(workflowCopy);
 
         // Check output.
@@ -354,8 +354,8 @@ public class WorkflowClient extends Configured {
 
         LOG.info("In WorkflowClient. Got WorkflowStatus back from JobTracker.");
 
-        WorkflowProfile profile = workflowSubmitClient
-            .getWorkflowProfile(workflowId);
+        WorkflowProfile profile =
+            workflowSubmitClient.getWorkflowProfile(workflowId);
 
         LOG.info("In WorkflowClient. Got WorkflowProfile back from JobTracker.");
 
@@ -393,8 +393,8 @@ public class WorkflowClient extends Configured {
    * map and reduce tasks are also updated in the {@link JobConf} class (so that
    * they can be used by a scheduler/planner).
    */
-  private void updateJobInfo(WorkflowConf workflow) throws IOException,
-      InterruptedException, ClassNotFoundException {
+  private void updateJobInfo(WorkflowConf workflow, WorkflowID workflowId)
+      throws IOException, InterruptedException, ClassNotFoundException {
 
     LOG.info("In updateJobInfo.");
     Map<String, JobConf> workflowJobs = workflow.getJobs();
@@ -403,7 +403,7 @@ public class WorkflowClient extends Configured {
       LOG.info("Updating information for job: " + job);
       JobConf jobConf = workflowJobs.get(job);
 
-      // Staging & submit directories, other job setup information.
+      // Staging & submit directories.
       Path stagingArea = WorkflowSubmissionFiles.getStagingDir(
           WorkflowClient.this, workflow);
       JobID jobId = getJobId(jobConf);
@@ -413,6 +413,10 @@ public class WorkflowClient extends Configured {
       LOG.info("Path job staging area: " + stagingArea.toString());
       LOG.info("JobID:  " + jobId.toString());
       LOG.info("Path submitJobDir: " + submitJobDir.toString());
+
+      // Other information which hasn't been set yet.
+      jobConf.setWorkflowId(workflowId.toString());
+      jobConf.setJobId(jobId.toString());
 
       // Compute # of maps/reduces.
       // Can't compute maps without intermediate data, so just assume proper

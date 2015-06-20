@@ -43,6 +43,9 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.jar.Attributes;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -939,9 +942,35 @@ public class JobClient extends Configured implements MRConstants, Tool  {
       InterruptedException,
       IOException{
         JobConf jobCopy = job;
-        Path jobStagingArea = JobSubmissionFiles.getStagingDir(JobClient.this,
-            jobCopy);
-        JobID jobId = jobSubmitClient.getNewJobId();
+
+        // Parse & set existing jar properties in the jobconf.
+        // The new API calls this method; it's the earliest time to set props.
+        String fileName = job.getJar();
+        JarFile jarFile = new JarFile(fileName);
+        Manifest manifest = jarFile.getManifest();
+        if (manifest != null) {
+          Attributes attributes = manifest.getMainAttributes();
+          try {
+            String workflowId = attributes.getValue("Workflow-Id");
+            String jobId = attributes.getValue("Job-Id");
+            if (workflowId != null) { jobCopy.setWorkflowId(workflowId); }
+            if (jobId != null) { jobCopy.setJobId(jobId); }
+          } catch (IllegalArgumentException ia) {}
+        }
+        jarFile.close();
+
+        // Check if the job already has an id.
+        JobID jobId;
+        String jobIdString = jobCopy.getJobId();
+        if (jobIdString == null || jobIdString == "") {
+          jobId = jobSubmitClient.getNewJobId();
+          jobCopy.setJobId(jobId.toString());
+        } else {
+          jobId = JobID.forName(jobIdString);
+        }
+
+        Path jobStagingArea =
+            JobSubmissionFiles.getStagingDir(JobClient.this, jobCopy);
         Path submitJobDir = new Path(jobStagingArea, jobId.toString());
         jobCopy.set("mapreduce.job.dir", submitJobDir.toString());
         JobStatus status = null;

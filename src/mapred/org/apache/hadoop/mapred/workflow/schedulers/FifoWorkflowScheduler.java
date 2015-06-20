@@ -79,16 +79,13 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
       return null;
     }
 
-    List<MachineTypeJobNamePair> taskMapping = null;
-    Map<String, String> trackerMapping = null;
-
     if (schedulingPlan == null) {
       schedulingPlan = workflowSchedulingProtocol.getWorkflowSchedulingPlan();
       if (schedulingPlan == null) { return null; }
-
-      taskMapping = schedulingPlan.getTaskMapping();
-      trackerMapping = schedulingPlan.getTrackerMapping();
     }
+
+    List<MachineTypeJobNamePair> taskMapping = schedulingPlan.getTaskMapping();
+    Map<String, String> trackerMapping = schedulingPlan.getTrackerMapping();
 
     // Find out what the next job/workflow to be executed is.
     Collection<Object> queue = fifoWorkflowListener.getQueue();

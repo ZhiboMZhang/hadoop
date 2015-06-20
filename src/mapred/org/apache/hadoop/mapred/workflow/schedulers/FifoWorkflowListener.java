@@ -186,7 +186,20 @@ public class FifoWorkflowListener extends JobInProgressListener implements
 
   @Override
   public void jobAdded(JobInProgress job) throws IOException {
-    LOG.info("In jobAdded function.");
+
+    LOG.info("Job added to listener queue.");
+
+    // Add the job to the queue, and list of jobs.
+    queue.put(new JobSchedulingInfo(job.getStatus()), job);
+    jobs.put(job.getJobID(), job);
+
+    // Update the workflow status.
+    WorkflowID workflowId = job.getStatus().getWorkflowId();
+    if (workflowId != null) {
+      LOG.info("Added job is a workflow job.");
+      WorkflowInProgress workflow = workflows.get(workflowId);
+      workflow.getStatus().addSubmittedJob(job.getJobID().toString());
+    }
   }
 
   @Override
@@ -195,8 +208,47 @@ public class FifoWorkflowListener extends JobInProgressListener implements
   }
 
   @Override
+  // Most code is taken from JobQueueJobInProgressListener.
   public void jobUpdated(JobChangeEvent event) {
+
     LOG.info("In jobUpdated function.");
+    if (event instanceof JobStatusChangeEvent) {
+      JobStatusChangeEvent statusEvent = (JobStatusChangeEvent) event;
+
+      if (statusEvent.getEventType() == EventType.RUN_STATE_CHANGED) {
+        int runState = statusEvent.getNewStatus().getRunState();
+
+        if (JobStatus.SUCCEEDED == runState || JobStatus.FAILED == runState
+            || JobStatus.KILLED == runState) {
+
+          JobStatus oldStatus = statusEvent.getOldStatus();
+          JobSchedulingInfo info = new JobSchedulingInfo(oldStatus);
+          JobInProgress job = event.getJobInProgress();
+          WorkflowID workflowId = job.getStatus().getWorkflowId();
+          LOG.info("WORKFLOW: jobUpdated: workflowId is: " + workflowId);
+
+          // The job is finished, so either way remove it from the queue.
+          queue.remove(info);
+          jobs.remove(info.getJobId());
+
+          // Job belongs to a workflow, remove it from the queue.
+          if (workflowId != null) {
+
+            // Update the workflow status.
+            WorkflowInProgress workflow = workflows.get(workflowId);
+            WorkflowStatus workflowStatus = workflow.getStatus();
+
+            workflowStatus.addFinishedJob(info.getJobId().toString());
+
+            // Check the workflow status.
+            if (workflow.getStatus().isFinished()) {
+              queue.remove(new WorkflowSchedulingInfo(workflowStatus));
+              workflows.remove(workflowId);
+            }
+          }
+        }
+      }
+    }
   }
 
 }
