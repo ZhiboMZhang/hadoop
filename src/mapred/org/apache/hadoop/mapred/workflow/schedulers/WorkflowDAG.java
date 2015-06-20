@@ -9,12 +9,12 @@ import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.MachineType;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
-import org.apache.hadoop.mapred.workflow.WorkflowConf.JobInfo;
 
 /**
  * Class representing a workflow directed acyclic graph.
@@ -317,16 +317,16 @@ public class WorkflowDAG {
     WorkflowDAG dag = new WorkflowDAG();
 
     // A temporary mapping to help with DAG creation.
-    Map<JobInfo, WorkflowNodePair> infoToMRStages =
-        new HashMap<JobInfo, WorkflowNodePair>();
+    Map<JobConf, WorkflowNodePair> infoToMRStages =
+        new HashMap<JobConf, WorkflowNodePair>();
 
     // Create a WorkflowNode for each JobInfo (map & reduce).
-    Map<String, JobInfo> workflowJobs = workflow.getJobs();
+    Map<String, JobConf> workflowJobs = workflow.getJobs();
     for (String jobName : workflowJobs.keySet()) {
 
-      JobInfo workflowJob = workflowJobs.get(jobName);
-      int maps = workflowJob.numMaps;
-      int reduces = workflowJob.numReduces;
+      JobConf workflowJob = workflowJobs.get(jobName);
+      int maps = workflowJob.getNumMapTasks();
+      int reduces = workflowJob.getNumReduceTasks();
 
       WorkflowNode mapStage = new WorkflowNode(jobName, maps, true);
       WorkflowNode redStage = new WorkflowNode(jobName, reduces, false);

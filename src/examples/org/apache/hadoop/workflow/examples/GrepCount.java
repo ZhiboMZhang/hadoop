@@ -43,7 +43,7 @@ public class GrepCount {
     workflowConf.addJob("WordCount", "wordcount.jar");
 
     workflowConf.setJobMainClass("Grep", "org.apache.hadoop.examples.Grep");
-    workflowConf.setJobParameters("Grep", "search");
+    workflowConf.setJobArguments("Grep", "search");
 
     workflowConf.setJobMainClass("WordCount", "org.apache.hadoop.examples.WordCount");
 

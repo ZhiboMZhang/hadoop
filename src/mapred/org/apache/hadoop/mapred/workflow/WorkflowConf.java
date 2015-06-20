@@ -32,7 +32,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
@@ -58,45 +57,12 @@ public class WorkflowConf extends Configuration implements Writable {
     }
   }
 
-  public class JobInfo implements Writable {
-
-    public JobConf jobConf;
-    public JobID jobId;
-
-    public String parameters;
-    public String mainClass;
-    public int numMaps;
-    public int numReduces;
-
-    @Override
-    public void readFields(DataInput in) throws IOException {
-      jobConf = new JobConf();
-      jobConf.readFields(in);
-      jobId = new JobID();
-      jobId.readFields(in);
-      mainClass = Text.readString(in);
-      parameters = Text.readString(in);
-      numMaps = in.readInt();
-      numReduces = in.readInt();
-    }
-
-    @Override
-    public void write(DataOutput out) throws IOException {
-      jobConf.write(out);
-      jobId.write(out);
-      Text.writeString(out, mainClass);
-      Text.writeString(out, parameters);
-      out.writeInt(numMaps);
-      out.writeInt(numReduces);
-    }
-  }
-
   public static final Log LOG = LogFactory.getLog(WorkflowConf.class);
   public static final String SCHEDULING_PLAN_PROPERTY_NAME =
       "mapred.workflow.scheduler";
 
   private SchedulingPlan schedulingPlan;
-  private Map<String, JobInfo> jobs;
+  private Map<String, JobConf> jobs;
   private Map<String, Set<String>> dependencies;
 
   /**
@@ -107,7 +73,7 @@ public class WorkflowConf extends Configuration implements Writable {
 
   public WorkflowConf(Class<?> exampleClass) {
 
-    this.jobs = new HashMap<String, JobInfo>();
+    this.jobs = new HashMap<String, JobConf>();
     this.dependencies = new HashMap<String, Set<String>>();
 
     setJarByClass(exampleClass);
@@ -121,9 +87,9 @@ public class WorkflowConf extends Configuration implements Writable {
   }
 
   /**
-   * Return the {@link JobInfo jobs} which comprise the workflow.
+   * Return the {@link JobConf jobs} which comprise the workflow.
    */
-  public Map<String, JobInfo> getJobs() {
+  public Map<String, JobConf> getJobs() {
     return jobs;
   }
 
@@ -173,7 +139,7 @@ public class WorkflowConf extends Configuration implements Writable {
   public void addJob(String name, String jarName)
       throws IOException {
 
-    LOG.info("Adding job to workflow.");
+    LOG.info("Adding job " + name + " to workflow.");
 
     // Get location of workflow jar.
     Path jar = new Path(getJar());
@@ -181,13 +147,9 @@ public class WorkflowConf extends Configuration implements Writable {
     try {
       Path addedJarPath = new Path(jar.getParent(), jarName);
       boolean exists = FileSystem.getLocal(this).exists(addedJarPath);
-      LOG.info("Path " + addedJarPath.toString()
-          + (exists ? " exists" : " does not exist"));
       if (exists) {
-        // Store contained jobs in JobInfo class as opposed to attributes.
-        JobInfo job = new JobInfo();
-        job.jobConf = new JobConf();
-        job.jobConf.setJar(jarName);
+        JobConf job = new JobConf();
+        job.setJar(jarName);
         jobs.put(name, job);
 
       } else {
@@ -203,21 +165,19 @@ public class WorkflowConf extends Configuration implements Writable {
   }
 
   /**
-   * Set the workflow job's command-line parameters.
+   * Set the workflow job's command-line arguments.
    *
    * @param name The name of the workflow job.
-   * @param parameters The parameters.
+   * @param arguments The arguments.
    * @throws IOException
    */
-  public void setJobParameters(String name, String parameters)
-      throws IOException {
-
-    JobInfo job = jobs.get(name);
+  public void setJobArguments(String name, String arguments) throws IOException {
+    JobConf job = jobs.get(name);
     if (null == job) {
-      throw new IOException("Cannot add parameters to job " + name
+      throw new IOException("Cannot add arguments to job " + name
           + ". Job does not exist");
     }
-    job.parameters = parameters;
+    job.setArguments(arguments);
   }
 
   /**
@@ -228,12 +188,12 @@ public class WorkflowConf extends Configuration implements Writable {
    * @throws IOException
    */
   public void setJobMainClass(String name, String mainClass) throws IOException {
-    JobInfo job = jobs.get(name);
+    JobConf job = jobs.get(name);
     if (null == job) {
       throw new IOException("Cannot add main class to job " + name
           + ". Job does not exist.");
     }
-    job.mainClass = mainClass;
+    job.setMainClass(mainClass);
   }
 
   /**
@@ -389,16 +349,16 @@ public class WorkflowConf extends Configuration implements Writable {
   public void readFields(DataInput in) throws IOException {
     super.readFields(in);
 
-    jobs = new HashMap<String, JobInfo>();
+    jobs = new HashMap<String, JobConf>();
     dependencies = new HashMap<String, Set<String>>();
 
     // Read in Jobs & Dependencies.
     int numJobs = in.readInt();
     for (int i = 0; i < numJobs; i++) {
       String job = Text.readString(in);
-      JobInfo jobInfo = new JobInfo();
-      jobInfo.readFields(in);
-      jobs.put(job, jobInfo);
+      JobConf jobConf = new JobConf();
+      jobConf.readFields(in);
+      jobs.put(job, jobConf);
     }
 
     int numDependencies = in.readInt();

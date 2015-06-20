@@ -21,24 +21,22 @@ package org.apache.hadoop.mapred;
 
 import java.io.IOException;
 
-import java.net.URL;
-import java.net.URLDecoder;
-import java.util.Enumeration;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.filecache.DistributedCache;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.conf.Configuration;
-
-import org.apache.hadoop.io.*;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.RawComparator;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.WritableComparable;
+import org.apache.hadoop.io.WritableComparator;
 import org.apache.hadoop.io.compress.CompressionCodec;
-
+import org.apache.hadoop.mapred.lib.HashPartitioner;
 import org.apache.hadoop.mapred.lib.IdentityMapper;
 import org.apache.hadoop.mapred.lib.IdentityReducer;
-import org.apache.hadoop.mapred.lib.HashPartitioner;
 import org.apache.hadoop.mapred.lib.KeyFieldBasedComparator;
 import org.apache.hadoop.mapred.lib.KeyFieldBasedPartitioner;
 import org.apache.hadoop.security.Credentials;
@@ -414,30 +412,91 @@ public class JobConf extends Configuration {
 
   /**
    * Get credentials for the job.
-   * @return credentials for the job
    */
-  public Credentials getCredentials() {
-    return credentials;
-  }
+  public Credentials getCredentials() { return credentials; }
   
-  void setCredentials(Credentials credentials) {
-    this.credentials = credentials;
-  }
+  public void setCredentials(Credentials credentials) { this.credentials = credentials; }
   
   /**
    * Get the user jar for the map-reduce job.
-   * 
-   * @return the user jar for the map-reduce job.
    */
   public String getJar() { return get("mapred.jar"); }
   
   /**
    * Set the user jar for the map-reduce job.
-   * 
-   * @param jar the user jar for the map-reduce job.
    */
   public void setJar(String jar) { set("mapred.jar", jar); }
-  
+
+  /**
+   * Get the JobId for the map-reduce job. This is used for workflow scheduling.
+   */
+  public String getJobId() { return get("mapred.job.id"); }
+
+  /**
+   * Set the JobId for the map-reduce job. This is used for workflow scheduling.
+   */
+  public void setJobId(String jobId) { set("mapred.job.id", jobId); }
+
+  /**
+   * Get the WorkflowId for the map-reduce job. This is used for workflow
+   * scheduling.
+   */
+  public String getWorkflowId() { return get("mapred.workflow.id"); }
+
+  /**
+   * Set the WorkflowId for the map-reduce job. This is used for workflow
+   * scheduling.
+   */
+  public void setWorkflowId(String workflowId) { set("mapred.workflow.id", workflowId); }
+
+  /**
+   * Get the Input Directory for the map-reduce job. This is used for workflow
+   * scheduling.
+   */
+  public String getInputDir() { return get("mapred.input.dir"); }
+
+  /**
+   * Set the Input Directory for the map-reduce job. This is used for workflow
+   * scheduling.
+   */
+  public void setInputDir(String dir) { set("mapred.input.dir", dir); }
+
+  /**
+   * Get the Output Directory for the map-reduce job. This is used for workflow
+   * scheduling.
+   */
+  public String getOutputDir() { return get("mapred.output.dir"); }
+
+  /**
+   * Set the Output Directory for the map-reduce job. This is used for workflow
+   * scheduling.
+   */
+  public void setOutputDir(String dir) { set("mapred.output.dir", dir); }
+
+  /**
+   * Get the arguments for the map-reduce job. This is used for workflow
+   * scheduling.
+   */
+  public String getArguments() { return get("mapred.arguments"); }
+
+  /**
+   * Set the arguments for the map-reduce job. This is used for workflow
+   * scheduling.
+   */
+  public void setArguments(String arguments) { set("mapred.arguments", arguments); }
+
+  /**
+   * Get the main class for the map-reduce job. This is used for workflow
+   * scheduling.
+   */
+  public String getMainClass() { return get("mapred.main.class"); }
+
+  /**
+   * Set the main class for the map-reduce job. This is used for workflow
+   * scheduling.
+   */
+  public void setMainClass(String mainClass) { set("mapred.main.class", mainClass); }
+
   /**
    * Set the job's jar file by finding an example class location.
    * 
@@ -493,8 +552,6 @@ public class JobConf extends Configuration {
   public void setUser(String user) {
     set("user.name", user);
   }
-
-
   
   /**
    * Set whether the framework should keep the intermediate files for 
@@ -594,9 +651,7 @@ public class JobConf extends Configuration {
    */
   public InputFormat getInputFormat() {
     return ReflectionUtils.newInstance(getClass("mapred.input.format.class",
-                                                             TextInputFormat.class,
-                                                             InputFormat.class),
-                                                    this);
+      TextInputFormat.class, InputFormat.class), this);
   }
   
   /**
@@ -1562,7 +1617,7 @@ public class JobConf extends Configuration {
    * 
    * @param mDbgScript the script name
    */
-  public void  setMapDebugScript(String mDbgScript) {
+  public void setMapDebugScript(String mDbgScript) {
     set("mapred.map.task.debug.script", mDbgScript);
   }
   
@@ -1599,7 +1654,7 @@ public class JobConf extends Configuration {
    * 
    * @param rDbgScript the script name
    */
-  public void  setReduceDebugScript(String rDbgScript) {
+  public void setReduceDebugScript(String rDbgScript) {
     set("mapred.reduce.task.debug.script", rDbgScript);
   }
   
@@ -1902,7 +1957,5 @@ public class JobConf extends Configuration {
                 + " and " + JobConf.MAPRED_JOB_REDUCE_MEMORY_MB_PROPERTY);
     }
   }
-  
 
 }
-

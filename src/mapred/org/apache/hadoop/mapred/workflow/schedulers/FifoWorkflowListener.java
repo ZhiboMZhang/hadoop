@@ -181,7 +181,7 @@ public class FifoWorkflowListener extends JobInProgressListener implements
 
   @Override
   public void workflowUpdated(WorkflowChangeEvent event) {
-    // Workflow updating currently not handled.
+    // TODO: Workflow updating currently not handled.
   }
 
   @Override

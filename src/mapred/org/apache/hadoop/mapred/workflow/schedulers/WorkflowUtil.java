@@ -33,10 +33,6 @@ import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.MachineType;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
-import org.apache.hadoop.mapred.workflow.WorkflowConf;
-import org.apache.hadoop.mapred.workflow.WorkflowConf.JobInfo;
-import org.apache.hadoop.mapred.workflow.WorkflowID;
-import org.apache.hadoop.mapred.workflow.WorkflowStatus;
 
 public class WorkflowUtil {
 

@@ -46,7 +46,6 @@ import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.SafeModeException;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
-import org.apache.hadoop.mapred.workflow.WorkflowConf.JobInfo;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -372,33 +371,44 @@ public class WorkflowClient extends Configured {
     });
   }
 
+  private JobID getJobId(JobConf conf) throws IOException {
+    JobID jobId;
+    String jobIdString = conf.getJobId();
+
+    if (jobIdString == null || jobIdString == "") {
+      jobId = workflowSubmitClient.getNewJobId();
+      conf.setJobId(jobId.toString());
+    } else {
+      jobId = JobID.forName(jobIdString);
+    }
+
+    return jobId;
+  }
+
   /**
    * Update initial workflow job information.
    *
    * This function initializes all workflow job's staging & submit directories,
    * as well as setting up initial input and output directories. The number of
-   * map and reduce tasks are also updated in the {@link JobInfo} class (so that
+   * map and reduce tasks are also updated in the {@link JobConf} class (so that
    * they can be used by a scheduler/planner).
    */
   private void updateJobInfo(WorkflowConf workflow) throws IOException,
       InterruptedException, ClassNotFoundException {
 
     LOG.info("In updateJobInfo.");
-    Map<String, JobInfo> workflowJobs = workflow.getJobs();
+    Map<String, JobConf> workflowJobs = workflow.getJobs();
 
     for (String job : workflowJobs.keySet()) {
       LOG.info("Updating information for job: " + job);
-      JobInfo jobInfo = workflowJobs.get(job);
-      JobConf jobConf = jobInfo.jobConf;
+      JobConf jobConf = workflowJobs.get(job);
 
       // Staging & submit directories, other job setup information.
       Path stagingArea = WorkflowSubmissionFiles.getStagingDir(
           WorkflowClient.this, workflow);
-      JobID jobId = workflowSubmitClient.getNewJobId();
+      JobID jobId = getJobId(jobConf);
       Path submitJobDir = new Path(stagingArea, jobId.toString());
       jobConf.set("mapreduce.job.dir", submitJobDir.toString());
-
-      jobInfo.jobId = jobId;
 
       LOG.info("Path job staging area: " + stagingArea.toString());
       LOG.info("JobID:  " + jobId.toString());
@@ -407,11 +417,8 @@ public class WorkflowClient extends Configured {
       // Compute # of maps/reduces.
       // Can't compute maps without intermediate data, so just assume proper
       // value is given in the configuration file.
-      jobInfo.numReduces = jobConf.getNumReduceTasks();
-      jobInfo.numMaps = jobConf.getNumMapTasks();
-
-      LOG.info("Set # of reduces: " + jobInfo.numReduces);
-      LOG.info("Set # of maps: " + jobInfo.numMaps);
+      LOG.info("Set # of reduces: " + jobConf.getNumReduceTasks());
+      LOG.info("Set # of maps: " + jobConf.getNumMapTasks());
 
       // Set up input directories for all jobs.
       String jobInputDir = jobConf.get("mapreduce.job.dir") + Path.SEPARATOR
@@ -435,7 +442,7 @@ public class WorkflowClient extends Configured {
 
     LOG.info("In updateJobIoPaths.");
 
-    Map<String, JobInfo> workflowJobs = workflow.getJobs();
+    Map<String, JobConf> workflowJobs = workflow.getJobs();
     Map<String, Set<String>> dependencyMap = workflow.getDependencies();
     Set<String> dependencies = new HashSet<String>();
 
@@ -447,13 +454,13 @@ public class WorkflowClient extends Configured {
 
     // Iterate through jobs with dependencies to set their in/output paths.
     for (String job : dependencyMap.keySet()) {
-      JobConf jobConf = workflowJobs.get(job).jobConf;
+      JobConf jobConf = workflowJobs.get(job);
       Set<String> jobDependencies = dependencyMap.get(job);
 
       // A job with x as a dependency will have its input as x's output.
       String inputDir = jobConf.get("mapred.input.dir");
       for (String dependency : jobDependencies) {
-        JobConf jobConfDependency = workflowJobs.get(dependency).jobConf;
+        JobConf jobConfDependency = workflowJobs.get(dependency);
         jobConfDependency.set("mapred.output.dir", inputDir);
         dependencies.add(dependency);
 
@@ -466,7 +473,7 @@ public class WorkflowClient extends Configured {
     // Jobs with no dependencies are entry jobs.
     for (String job : workflow.getJobs().keySet()) {
       if (dependencyMap.get(job) == null) {
-        JobConf jobConf = workflowJobs.get(job).jobConf;
+        JobConf jobConf = workflowJobs.get(job);
         jobConf.set("mapred.input.dir", workflowInputDir);
 
         LOG.info("Set input of " + job + " (now: "
@@ -477,7 +484,7 @@ public class WorkflowClient extends Configured {
     // Jobs that aren't dependencies for any other jobs are exit jobs.
     for (String job : workflow.getJobs().keySet()) {
       if (!dependencies.contains(job)) {
-        JobConf jobConf = workflowJobs.get(job).jobConf;
+        JobConf jobConf = workflowJobs.get(job);
         jobConf.set("mapred.output.dir", workflowOutputDir);
 
         LOG.info("Set output of " + job + "(now: "
@@ -497,12 +504,11 @@ public class WorkflowClient extends Configured {
       throws ClassNotFoundException, IOException, InterruptedException {
 
     LOG.info("In checkOutputSpecificaion.");
-    Map<String, JobInfo> workflowJobs = workflow.getJobs();
+    Map<String, JobConf> workflowJobs = workflow.getJobs();
 
     for (String job : workflowJobs.keySet()) {
-      JobInfo jobInfo = workflowJobs.get(job);
-      JobConf jobConf = jobInfo.jobConf;
-      JobContext context = new JobContext(jobConf, jobInfo.jobId);
+      JobConf jobConf = workflowJobs.get(job);
+      JobContext context = new JobContext(jobConf, getJobId(jobConf));
 
       if (jobConf.getNumReduceTasks() == 0 ? jobConf.getUseNewMapper()
           : jobConf.getUseNewReducer()) {

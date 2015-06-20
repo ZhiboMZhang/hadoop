@@ -24,9 +24,9 @@ import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.mapred.JobClient;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.JobInProgress;
 import org.apache.hadoop.mapred.JobTracker;
-import org.apache.hadoop.mapred.workflow.WorkflowConf.JobInfo;
 import org.apache.hadoop.mapred.workflow.WorkflowStatus.RunState;
 
 /**
