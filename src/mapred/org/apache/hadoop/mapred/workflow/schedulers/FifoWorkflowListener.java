@@ -70,6 +70,11 @@ public class FifoWorkflowListener extends JobInProgressListener implements
     queue.put(new WorkflowSchedulingInfo(workflow.getStatus()), workflow);
 
     LOG.info("Added workflow " + workflowId + " to queue.");
+
+    // Add all workflow jobs to WorkflowStatus in PREP state.
+    for (JobConf conf : workflow.getConf().getJobs().values()) {
+      workflow.getStatus().addPrepJob(conf.getJobId());
+    }
   }
 
   @Override
@@ -96,7 +101,7 @@ public class FifoWorkflowListener extends JobInProgressListener implements
     if (workflowId != null) {
       LOG.info("Added job is a workflow job.");
       WorkflowInProgress workflow = workflows.get(workflowId);
-      workflow.getStatus().addSubmittedJob(job.getJobID().toString());
+      workflow.getStatus().addRunningJob(job.getJobID().toString());
     }
   }
 

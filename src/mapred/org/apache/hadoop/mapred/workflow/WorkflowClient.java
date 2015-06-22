@@ -98,6 +98,19 @@ public class WorkflowClient extends Configured {
     }
 
     @Override
+    public boolean isComplete() throws IOException {
+      updateStatus();
+      // TODO: is this correct? (does it have to be non-blocking?)
+      return status.isFinished();
+    }
+
+    @Override
+    public boolean isSuccessful() throws IOException {
+      updateStatus();
+      return status.getRunState() == WorkflowStatus.RunState.SUCCEEDED;
+    }
+
+    @Override
     public WorkflowID getID() {
       // TODO: function not called yet in the code.
       return profile.getWorkflowId();

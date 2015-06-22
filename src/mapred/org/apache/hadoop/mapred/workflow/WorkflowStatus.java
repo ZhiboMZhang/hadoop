@@ -19,6 +19,8 @@ package org.apache.hadoop.mapred.workflow;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
@@ -38,11 +40,59 @@ public class WorkflowStatus implements Writable {
   private String failureInfo = "NA";
   private long submissionTime = -1;
 
+  private Set<String> prepJobs;
+  private Set<String> submittedJobs;
+  private Set<String> runningJobs;
+  private Set<String> finishedJobs;  // Equal to succeeded jobs.
+
   // Required for readFields()/reflection when building the object.
   public WorkflowStatus() {}
 
   public WorkflowStatus(WorkflowID workflowId) {
     this.workflowId = workflowId;
+
+    this.prepJobs = new HashSet<String>();
+    this.submittedJobs = new HashSet<String>();
+    this.runningJobs = new HashSet<String>();
+    this.finishedJobs = new HashSet<String>();
+  }
+
+  /**
+   * Add a job to the list of jobs which have not yet been submitted.
+   *
+   * @param jobId A string representing the JobID of the job to add.
+   */
+  public void addPrepJob(String jobId) {
+    prepJobs.add(jobId);
+  }
+
+  // TODO: job submitted for a workflow which actually doesn't contain it..
+  // TODO: for all of them.. what if job is in the wrong state?
+  // TODO: any need to be synchronized, and with what lock?
+  public void addSubmittedJob(String jobId) {
+    prepJobs.remove(jobId);
+    submittedJobs.add(jobId);
+    runState = RunState.SUBMITTED;
+  }
+
+  public void addRunningJob(String jobId) {
+    submittedJobs.remove(jobId);
+    runningJobs.add(jobId);
+    runState = RunState.RUNNING;
+  }
+
+  public void addFinishedJob(String jobId) {
+    runningJobs.remove(jobId);
+    finishedJobs.add(jobId);
+
+    if (isFinished()) {
+      runState = RunState.SUCCEEDED;
+    }
+  }
+
+  public boolean isFinished() {
+    return prepJobs.isEmpty() && submittedJobs.isEmpty()
+        && runningJobs.isEmpty();
   }
 
   /**

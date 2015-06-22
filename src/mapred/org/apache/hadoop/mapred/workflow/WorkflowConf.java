@@ -149,7 +149,10 @@ public class WorkflowConf extends Configuration implements Writable {
       boolean exists = FileSystem.getLocal(this).exists(addedJarPath);
       if (exists) {
         JobConf job = new JobConf();
-        job.setJar(jarName);
+        // TODO: Using full paths currently.
+        LOG.info("Assuming full paths, job jar is: " + addedJarPath.toString());
+        job.setJar(addedJarPath.toString());
+        job.setJobName(name);
         jobs.put(name, job);
 
       } else {

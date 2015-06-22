@@ -39,6 +39,22 @@ public interface RunningWorkflow {
   public String getWorkflowName();
 
   /**
+   * Check if the workflow is finished or not.
+   *
+   * @return <code>true</code> if the workflow is complete, <code>false</code>
+   *         otherwise.
+   */
+  public boolean isComplete() throws IOException;
+
+  /**
+   * Check if the workflow completed successfully.
+   *
+   * @return <code>true</code> if the workflow succeeded, <code>false</code>
+   *         otherwise.
+   */
+  public boolean isSuccessful() throws IOException;
+
+  /**
    * Get failure information for the workflow.
    * 
    * @return the failure information for the workflow.
