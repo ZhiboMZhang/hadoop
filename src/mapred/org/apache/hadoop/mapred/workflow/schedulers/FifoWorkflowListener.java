@@ -25,10 +25,10 @@ import java.util.Map;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.mapred.JobChangeEvent;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.JobInProgress;
 import org.apache.hadoop.mapred.JobInProgressListener;
-import org.apache.hadoop.mapred.JobPriority;
 import org.apache.hadoop.mapred.JobStatus;
 import org.apache.hadoop.mapred.JobStatusChangeEvent;
 import org.apache.hadoop.mapred.JobStatusChangeEvent.EventType;
@@ -40,108 +40,6 @@ import org.apache.hadoop.mapred.workflow.WorkflowStatus;
 
 public class FifoWorkflowListener extends JobInProgressListener implements
     WorkflowInProgressListener {
-
-  private static class SchedulingInfo {
-    private long startTime;
-
-    public SchedulingInfo(long startTime) {
-      this.startTime = startTime;
-    }
-
-    public long getStartTime() {
-      return startTime;
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      if (null == object || object.getClass() != SchedulingInfo.class) {
-        return false;
-      } else if (this == object) {
-        return true;
-      } else if (object instanceof SchedulingInfo) {
-        SchedulingInfo other = (SchedulingInfo) object;
-        return (startTime == other.startTime);
-      }
-
-      return false;
-    }
-  }
-
-  // See JobQueueJobInProgressListener
-  private static class JobSchedulingInfo extends SchedulingInfo {
-    private JobPriority priority;
-    private JobID id;
-
-    public JobSchedulingInfo(JobStatus status) {
-      super(status.getStartTime());
-      priority = status.getJobPriority();
-      id = status.getJobID();
-    }
-
-    public JobPriority getPriority() {
-      return priority;
-    }
-
-    public JobID getJobId() {
-      return id;
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      if (!super.equals(object)) { return false; }
-      if (object == null || object.getClass() != JobSchedulingInfo.class) {
-        return false;
-      } else if (object == this) {
-        return true;
-      } else if (object instanceof JobSchedulingInfo) {
-        JobSchedulingInfo other = (JobSchedulingInfo) object;
-        return (id.equals(other.id) && priority == other.priority);
-      }
-
-      return false;
-    }
-
-    @Override
-    public int hashCode() {
-      return (int) (id.hashCode() * priority.hashCode() + getStartTime());
-    }
-  }
-
-  private static class WorkflowSchedulingInfo extends SchedulingInfo {
-    private WorkflowID id;
-
-    public WorkflowSchedulingInfo(WorkflowStatus status) {
-      super(status.getSubmissionTime());
-      id = status.getWorkflowId();
-    }
-
-    public WorkflowID getWorkflowId() {
-      return id;
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      if (!super.equals(object)) {
-        return false;
-      }
-      if (object == null || object.getClass() != WorkflowSchedulingInfo.class) {
-        return false;
-      } else if (object == this) {
-        return true;
-      } else if (object instanceof WorkflowSchedulingInfo) {
-        WorkflowSchedulingInfo other = (WorkflowSchedulingInfo) object;
-        return (id.equals(other.id));
-      }
-
-      return false;
-    }
-
-    @Override
-    public int hashCode() {
-      return (int) (id.hashCode() + getStartTime());
-    }
-
-  }
 
   private static final Log LOG = LogFactory.getLog(FifoWorkflowListener.class);
 
