@@ -16,15 +16,9 @@
  */
 package org.apache.hadoop.mapred.workflow;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.JobTracker;
-import org.apache.hadoop.mapred.workflow.WorkflowStatus.RunState;
 
 /**
  * WorkflowInProgress maintains all the info for keeping a Workflow valid. It
@@ -66,6 +60,10 @@ public class WorkflowInProgress {
 
   public WorkflowProfile getProfile() {
     return profile;
+  }
+
+  public WorkflowConf getConf() {
+    return workflowConf;
   }
 
 }

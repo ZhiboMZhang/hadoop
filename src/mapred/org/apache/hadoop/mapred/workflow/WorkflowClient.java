@@ -572,6 +572,27 @@ public class WorkflowClient extends Configured {
 
     LOG.info("Wrote workflow configuration into " + confDir);
 
+    // Create input & output directories for workflow jobs.
+    Path workflowInput = new Path(workflow.get("mapred.input.dir"));
+    Path workflowOutput = new Path(workflow.get("mapred.output.dir"));
+    for (JobConf jobConf : workflow.getJobs().values()) {
+      Path input = new Path(jobConf.getInputDir());
+      Path output = new Path(jobConf.getOutputDir());
+
+      // Don't create the directory if it is the workflow input or output.
+      if (!workflowInput.equals(input)) {
+        FileSystem.mkdirs(fileSystem, input, mapredSysPerms);
+        LOG.info("Created " + input.toString() + " for " + jobConf.getJobName()
+            + " (input)");
+      }
+      if (!workflowOutput.equals(output)) {
+        FileSystem.mkdirs(fileSystem, output, mapredSysPerms);
+        LOG.info("Created " + output.toString() + " for "
+            + jobConf.getJobName() + " (output)");
+      }
+    }
+
+    // TODO: move jar files to dfs
     // TODO: should I also be moving over the individual job configurations?
 
     // Copy over the workflow jar file (TODO: is this necessary?).

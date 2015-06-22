@@ -477,7 +477,7 @@ public class JobConf extends Configuration {
    * Get the arguments for the map-reduce job. This is used for workflow
    * scheduling.
    */
-  public String getArguments() { return get("mapred.arguments"); }
+  public String getArguments() { return get("mapred.arguments", ""); }
 
   /**
    * Set the arguments for the map-reduce job. This is used for workflow

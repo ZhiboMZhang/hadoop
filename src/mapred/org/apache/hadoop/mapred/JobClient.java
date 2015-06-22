@@ -767,7 +767,9 @@ public class JobClient extends Configured implements MRConstants, Tool  {
     // Create a number of filenames in the JobTracker's fs namespace
     FileSystem fs = submitJobDir.getFileSystem(job);
     LOG.debug("default FileSystem: " + fs.getUri());
-    if (fs.exists(submitJobDir)) {
+    // The directory is already created for workflow jobs (contains input/).
+    // TODO: fix dirty workaround.
+    if (fs.exists(submitJobDir) && job.getWorkflowId() == null) {
       throw new IOException("Not submitting job. Job directory " + submitJobDir
           +" already exists!! This is unexpected.Please check what's there in" +
           " that directory");
@@ -775,6 +777,7 @@ public class JobClient extends Configured implements MRConstants, Tool  {
     submitJobDir = fs.makeQualified(submitJobDir);
     FsPermission mapredSysPerms = new FsPermission(JobSubmissionFiles.JOB_DIR_PERMISSION);
     FileSystem.mkdirs(fs, submitJobDir, mapredSysPerms);
+
     Path filesDir = JobSubmissionFiles.getJobDistCacheFiles(submitJobDir);
     Path archivesDir = JobSubmissionFiles.getJobDistCacheArchives(submitJobDir);
     Path libjarsDir = JobSubmissionFiles.getJobDistCacheLibjars(submitJobDir);
@@ -953,9 +956,13 @@ public class JobClient extends Configured implements MRConstants, Tool  {
           try {
             String workflowId = attributes.getValue("Workflow-Id");
             String jobId = attributes.getValue("Job-Id");
+            String jobName = attributes.getValue("Job-Name");
             if (workflowId != null) { jobCopy.setWorkflowId(workflowId); }
             if (jobId != null) { jobCopy.setJobId(jobId); }
-          } catch (IllegalArgumentException ia) {}
+            if (jobName != null) { jobCopy.setJobName(jobName); }
+          } catch (IllegalArgumentException ia) {
+            LOG.info("WORKFLOW: error in reading attributes from jar file.");
+          }
         }
         jarFile.close();
 

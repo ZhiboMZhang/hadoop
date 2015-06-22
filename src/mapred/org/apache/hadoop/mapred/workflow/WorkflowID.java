@@ -113,6 +113,29 @@ public class WorkflowID extends org.apache.hadoop.mapred.ID implements
     return stringBuilder.toString();
   }
 
+  /**
+   * Construct a WorkflowId object from a given string.
+   *
+   * @return A {@link WorkflowID} object when given a valid string, null otherwise.
+   * @throws IllegalArgumentException
+   */
+  public static WorkflowID forName(String string)
+      throws IllegalArgumentException {
+    if (string == null) {
+      return null;
+    }
+    try {
+      String[] parts = string.split(Character.toString(SEPARATOR));
+      if (parts.length == 3) {
+        if (parts[0].equals(WORKFLOW)) {
+          return new WorkflowID(parts[1], Integer.parseInt(parts[2]));
+        }
+      }
+    } catch (Exception e) {/* Continue execution to throw an exception. */}
+    throw new IllegalArgumentException("WorkflowId string: " + string
+        + " is not properly formed.");
+  }
+
   @Override
   public void readFields(DataInput in) throws IOException {
     super.readFields(in);

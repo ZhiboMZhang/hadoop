@@ -337,6 +337,7 @@ public class JobInProgress {
     this.resourceEstimator = new ResourceEstimator(this);
     this.status = new JobStatus(jobid, 0.0f, 0.0f, JobStatus.PREP);
     this.status.setUsername(conf.getUser());
+    this.status.setWorkflowId(WorkflowID.forName(conf.getWorkflowId()));
     String queueName = conf.getQueueName();
     this.profile = new JobProfile(conf.getUser(), jobid, "", "",
                                   conf.getJobName(), queueName);
@@ -473,6 +474,10 @@ public class JobInProgress {
       this.resourceEstimator = new ResourceEstimator(this);
       this.reduce_input_limit = conf.getLong("mapreduce.reduce.input.limit", 
           DEFAULT_REDUCE_INPUT_LIMIT);
+
+      // TODO: WORKFLOW : is conf the correct one?
+      this.status.setWorkflowId(WorkflowID.forName(conf.getWorkflowId()));
+
       // register job's tokens for renewal
       DelegationTokenRenewal.registerDelegationTokensForRenewal(
           jobInfo.getJobID(), ts, jobtracker.getConf());

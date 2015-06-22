@@ -358,6 +358,7 @@ public class JobStatus implements Writable, Cloneable {
   // Writable
   ///////////////////////////////////////
   public synchronized void write(DataOutput out) throws IOException {
+    workflowId.write(out);
     jobid.write(out);
     out.writeFloat(setupProgress);
     out.writeFloat(mapProgress);
@@ -368,6 +369,7 @@ public class JobStatus implements Writable, Cloneable {
     Text.writeString(out, user);
     WritableUtils.writeEnum(out, priority);
     Text.writeString(out, schedulingInfo);
+    Text.writeString(out, failureInfo);
 
     // Serialize the job's ACLs
     out.writeInt(jobACLs.size());
@@ -375,11 +377,13 @@ public class JobStatus implements Writable, Cloneable {
       WritableUtils.writeEnum(out, entry.getKey());
       entry.getValue().write(out);
     }
-    Text.writeString(out, failureInfo);
   }
 
   public synchronized void readFields(DataInput in) throws IOException {
-    this.jobid = JobID.read(in);
+    this.workflowId = new WorkflowID();
+    this.workflowId.readFields(in);
+    this.jobid = new JobID();
+    this.jobid.readFields(in);
     this.setupProgress = in.readFloat();
     this.mapProgress = in.readFloat();
     this.reduceProgress = in.readFloat();
@@ -389,6 +393,7 @@ public class JobStatus implements Writable, Cloneable {
     this.user = Text.readString(in);
     this.priority = WritableUtils.readEnum(in, JobPriority.class);
     this.schedulingInfo = Text.readString(in);
+    this.failureInfo = Text.readString(in);
 
     // De-serialize the job's ACLs
     int numACLs = in.readInt();
@@ -398,7 +403,6 @@ public class JobStatus implements Writable, Cloneable {
       acl.readFields(in);
       this.jobACLs.put(aclType, acl);
     }
-    this.failureInfo = Text.readString(in);
   }
 
   // A utility to convert new job runstates to the old ones.
