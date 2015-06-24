@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -31,13 +32,17 @@ import java.util.jar.Manifest;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapred.ClusterStatus;
+import org.apache.hadoop.mapred.EagerTaskInitializationListener;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.JobInProgress;
+import org.apache.hadoop.mapred.JobStatus;
 import org.apache.hadoop.mapred.Task;
 import org.apache.hadoop.mapred.TaskScheduler;
+import org.apache.hadoop.mapred.TaskTrackerStatus;
 import org.apache.hadoop.mapred.workflow.SchedulingPlan;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
-import org.apache.hadoop.mapred.workflow.schedulers.WorkflowUtil.MachineTypeJobNamePair;
 import org.apache.hadoop.mapreduce.server.jobtracker.TaskTracker;
 import org.apache.hadoop.util.RunJar;
 
@@ -47,39 +52,53 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
   private static final Log LOG = LogFactory.getLog(FifoWorkflowScheduler.class);
 
   private FifoWorkflowListener fifoWorkflowListener;
+  private EagerTaskInitializationListener eagerTaskInitializationListener;
 
   private WorkflowSchedulingProtocol workflowSchedulingProtocol;
   private SchedulingPlan schedulingPlan;
 
   public FifoWorkflowScheduler() {
-    LOG.info("In constructor.");
     fifoWorkflowListener = new FifoWorkflowListener();
   }
 
   @Override
   public synchronized void start() throws IOException {
     super.start();
-    LOG.info("In start() method.");
     taskTrackerManager.addJobInProgressListener(fifoWorkflowListener);
     taskTrackerManager.addWorkflowInProgressListener(fifoWorkflowListener);
+
+    eagerTaskInitializationListener.setTaskTrackerManager(taskTrackerManager);
+    eagerTaskInitializationListener.start();
+    taskTrackerManager.addJobInProgressListener(eagerTaskInitializationListener);
   }
 
   @Override
   public synchronized void terminate() throws IOException {
-    LOG.info("In terminate() method.");
     if (fifoWorkflowListener != null) {
       taskTrackerManager.removeJobInProgressListener(fifoWorkflowListener);
       taskTrackerManager.removeWorkflowInProgressListener(fifoWorkflowListener);
     }
+    if (eagerTaskInitializationListener != null) {
+      taskTrackerManager.removeJobInProgressListener(eagerTaskInitializationListener);
+      eagerTaskInitializationListener.terminate();
+    }
     super.terminate();
   }
 
+  @Override
+  public synchronized void setConf(Configuration conf) {
+    super.setConf(conf);
+    eagerTaskInitializationListener = new EagerTaskInitializationListener(conf);
+  }
+
+  @Override
   public synchronized void setWorkflowSchedulingProtocol(
       WorkflowSchedulingProtocol workflowSchedulingProtocol) {
     this.workflowSchedulingProtocol = workflowSchedulingProtocol;
   }
 
   @Override
+  // TODO
   // Called from JobTracker heartbeat function, which is called by a taskTracker
   public List<Task> assignTasks(TaskTracker taskTracker) throws IOException {
 
@@ -93,65 +112,139 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
       if (schedulingPlan == null) { return null; }
     }
 
-    Map<String, String> trackerMapping = schedulingPlan.getTrackerMapping();
-    List<MachineTypeJobNamePair> taskMapping = schedulingPlan.getTaskMapping();
-
     // Find out what the next job/workflow to be executed is.
     Collection<Object> queue = fifoWorkflowListener.getQueue();
+    List<Task> assignedTasks = new ArrayList<Task>();
 
     synchronized (queue) {
       for (Object object : queue) {
 
         if (object instanceof JobInProgress) {
+          // At this point we can execute tasks from any job we get, as the jobs
+          // must have been added by the workflowInPorgress object in the queue.
+
           JobInProgress job = (JobInProgress) object;
           LOG.info("Got job from queue.");
 
-          // Find out which tasktracker wants a task.
+          // TODO: job is not getting into running state
+          if (job.getStatus().getRunState() != JobStatus.RUNNING) {
+            LOG.info("Job is not in running state, continuing.");
+            continue;
+          }
+
+          // A mapping between available machines (names) and machine types.
+          Map<String, String> trackerMap = schedulingPlan.getTrackerMapping();
+          LOG.info("Got tracker mapping.");
+
+          // Find out which tasktracker wants a task, and it's machine type.
           String tracker = taskTracker.getTrackerName();
-          String machineType = trackerMapping.get(tracker);
-          LOG.info("Got tracker name as: " + tracker);
-          LOG.info("Got machine type as: " + machineType);
+          String machineType = trackerMap.get(tracker);
+          LOG.info("Got tracker: " + tracker + ", machineType: " + machineType);
 
-          // Match it with an available task.
-          // check tracker type against machine type
-          // if available job exists for machine type, run next job/task on it.
-          // MachineTypeJobNamePair pair = taskMapping.get(currentTask);
-          // LOG.info("MachineJobPair[" + currentTask + "] machineType: " +
-          // pair.machineType);
-          // LOG.info("MachineJobPair[" + currentTask + "] jobName: " +
-          // pair.jobName);
+          // Match the job with an available task.
+          // -If a running job exists for machine type, run next job/task on it.
+          // -It is up to the schedulingPlan to decide what to do if there
+          // doesn't exist any machines of the required type.
+          String jobName = job.getJobConf().getJobName();
+          boolean runMap = schedulingPlan.matchMap(machineType, jobName);
+          boolean runReduce = schedulingPlan.matchReduce(machineType, jobName);
+          LOG.info("Job " + jobName + " is running:" + (runMap ? " map " : "")
+              + (runReduce ? " reduce " : "") + "tasks.");
 
-          // String jobName = job.getJobConf().getJobName();
-          // LOG.info("Job to be scheduled jobName: " + jobName);
+          // Run a task from the job on the given tracker.
+          if (runMap || runReduce) {
 
+            Task task;
+            ClusterStatus clusterStatus = taskTrackerManager.getClusterStatus();
+            TaskTrackerStatus tts = taskTracker.getStatus();
+            final int clusterSize = clusterStatus.getTaskTrackers();
+            final int uniqueHosts = taskTrackerManager.getNumberOfUniqueHosts();
+            LOG.info("Got cluster status info to compute tracker capacity.");
+
+            if (runMap) {
+              LOG.info("Checking if a map task can be run.");
+              // Check if any slots are available on the tracker.
+              final int mapCapacity = tts.getMaxMapSlots();
+              final int runningMaps = tts.countMapTasks();
+              final int availableMapSlots = mapCapacity - runningMaps;
+
+              // Attempt to assign map tasks.
+              // TODO: all or just one?
+              for (int i = 0; i < availableMapSlots; i++) {
+                task = job.obtainNewMapTask(tts, clusterSize, uniqueHosts);
+
+                if (task != null) {
+                  assignedTasks.add(task);
+                  LOG.info("Assigning map task " + task.toString() + ".");
+                  // TODO: update schedulingPlan that task was run
+                }
+              }
+            }
+
+            // Don't run a reduce task if there aren't supposed to be any
+            // TODO
+            if (runReduce) {
+              LOG.info("Checking if a reduce task can be run.");
+              // Check if any slots are available on the tracker.
+              final int reduceCapacity = tts.getMaxReduceSlots();
+              final int runningReduces = tts.countReduceTasks();
+              final int availableReduceSlots = reduceCapacity - runningReduces;
+
+              // Attempt to assign reduce tasks.
+              for (int i = 0; i < availableReduceSlots; i++) {
+                task = job.obtainNewReduceTask(tts, clusterSize, uniqueHosts);
+
+                if (task != null) {
+                  assignedTasks.add(task);
+                  LOG.info("Assigning reduce task " + task.toString() + ".");
+                  // TODO: update schedulingPlan that task was run
+                }
+              }
+            }
+
+          }
 
         } else if (object instanceof WorkflowInProgress) {
+
           WorkflowInProgress workflow = (WorkflowInProgress) object;
           LOG.info("Got workflow from queue.");
-          // final JobConf jobConf = workflow.obtainNewJob();
-          JobConf jobConf = null;
-          // TODO: get next job using schedulingplan
 
-          if (jobConf == null) {
+          Collection<String> finishedJobs = workflow.getStatus().getFinishedJobs();
+          LOG.info("Workflowstatus finishedjobs: " + finishedJobs);
+          Collection<String> jobNames = schedulingPlan.getExecutableJobs(finishedJobs);
+
+          if (jobNames == null || jobNames.size() == 0) {
             LOG.info("All workflow jobs have been started.");
             continue;
           }
 
-          LOG.info("Got next job from workflow as: " + jobConf.getJar());
-          // LOG.info("Workflow jar: " + workflow.getConf().getJar());
+          // Log the jobs that can be run at this point of workflow execution.
+          String jobs = "";
+          for (String job : jobNames) { jobs += job + ", "; }
+          LOG.info("Got next jobs for workflow as: " + jobs);
 
-          // Check the jar for a manifest & add required attributes.
-          updateJarManifest(jobConf);
+          for (String jobName : jobNames) {
+            // Skip the job if it has already been started.
+            if (!workflow.getStatus().getPrepJobs().contains(jobName)) {
+              LOG.info("Skipping " + jobName + ", it has already been started.");
+              continue;
+            }
 
-          // Submit the job.
-          LOG.info("Submitting workflow job: " + jobConf.getJar());
-          workflow.getStatus().addSubmittedJob(jobConf.getJobId());
-          submitWorkflowJob(jobConf);
+            JobConf jobConf = workflow.getConf().getJobs().get(jobName);
+
+            // Check the jar for a manifest & add required attributes.
+            updateJarManifest(jobConf);
+
+            // Submit the job.
+            LOG.info("Submitting workflow job: " + jobConf.getJar());
+            workflow.getStatus().addSubmittedJob(jobConf.getJobName());
+            submitWorkflowJob(jobConf);
+          }
         }
       }
     }
 
-    return null;
+    return assignedTasks;
   }
 
   private void submitWorkflowJob(final JobConf jobConf) {
@@ -166,6 +259,7 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
       }
     }).start();
   }
+
 
   // Check that the jar file has a manifest, and if not then add one.
   // Write configuration properties to the jar file's manifest.
@@ -222,12 +316,23 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
   }
 
   @Override
-  public Collection<JobInProgress> getJobs(String queueName) {
-    LOG.info("In getJobs method.");
-    return null;
+  public Collection<JobInProgress> getJobs(String ignored) {
+
+    // Both JobInProgress and WorkflowInProgress objects exist in the default
+    // queue. Filter the queue to a Collection of JobInProgress objects.
+    Collection<Object> queue = fifoWorkflowListener.getQueue();
+    Collection<JobInProgress> jobQueue = new ArrayList<JobInProgress>();
+
+    for (Object object : queue) {
+      if (object instanceof JobInProgress) {
+        jobQueue.add((JobInProgress) object);
+      }
+    }
+
+    return jobQueue;
   }
 
-  // checkJobSubmission ?? (superclass method does nothing)
-  // refresh ?? (superclass method does nothing)
+  // TODO: checkJobSubmission ?? (superclass method does nothing)
+  // TODO: refresh ?? (superclass method does nothing)
 
 }

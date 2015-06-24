@@ -20,6 +20,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.PrivilegedExceptionAction;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -659,9 +661,41 @@ public class WorkflowClient extends Configured {
    * @throws IOException if communication to the {@link JobTracker} fails.
    * @throws InterruptedException
    */
+  // TODO:
+  // TODO: returns unsuccessful even when execution is a success.
   private boolean monitorAndPrintWorkflow(WorkflowConf conf,
       RunningWorkflow workflow) throws IOException, InterruptedException {
-    // TODO
-    return true;
+
+    String lastReport = null;
+    WorkflowID workflowId = workflow.getID();
+    LOG.info("Running workflow: " + workflowId);
+
+    while (!workflow.isComplete()) {
+      Thread.sleep(1000); // Sleep for a second.
+
+      // Get the state of all jobs.
+      WorkflowStatus status = workflow.getWorkflowStatus();
+      Collection<String> prepJobs = status.getPrepJobs();
+      Collection<String> submittedJobs = status.getSubmittedJobs();
+      Collection<String> runningJobs = status.getRunningJobs();
+      Collection<String> finishedJobs = status.getFinishedJobs();
+
+      String prepared = Arrays.toString(prepJobs.toArray());
+      String submitted = Arrays.toString(submittedJobs.toArray());
+      String running = Arrays.toString(runningJobs.toArray());
+      String finished = Arrays.toString(finishedJobs.toArray());
+
+      // Get the progress of each running job.
+      // TODO
+      String report = "\nPrepared: " + prepared + "\nSubmitted: " + submitted
+          + "\nRunning: " + running + "\nFinished: " + finished;
+
+      if (!report.equals(lastReport)) {
+        LOG.info(report);
+        lastReport = report;
+      }
+    }
+
+    return workflow.isSuccessful();
   }
 }

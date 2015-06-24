@@ -19,7 +19,7 @@ package org.apache.hadoop.mapred.workflow;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.List;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
@@ -27,7 +27,6 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
-import org.apache.hadoop.mapred.workflow.schedulers.WorkflowUtil.MachineTypeJobNamePair;
 
 public abstract class SchedulingPlan implements Writable {
 
@@ -41,22 +40,55 @@ public abstract class SchedulingPlan implements Writable {
    * @param table The time-price table to use.
    * @param workflow The workflow to be run.
    * 
-   * @return
+   * @return True if the workflow can be run with the given resources, false
+   *         otherwise.
    */
   public abstract boolean generatePlan(Set<MachineType> machineTypes,
       Map<String, ResourceStatus> machines, Map<TableKey, TableEntry> table,
       WorkflowConf workflow);
 
   /**
-   * Get an ordered list of tasks to be executed, each task specified by a
-   * machine type and job name pair.
-   */
-  public abstract List<MachineTypeJobNamePair> getTaskMapping();
-
-  /**
    * Get the mapping from actual available machines to machine types.
    */
   public abstract Map<String, String> getTrackerMapping();
+
+  /**
+   * Return whether a map task from a given job can be run (wrt/ the scheduled
+   * pairing) on the given machine type.
+   *
+   * @param machineType The machine type name.
+   * @param The job name.
+   *
+   * @return True if a map task from the job can be run on the machine type,
+   *         false otherwise.
+   */
+  public abstract boolean matchMap(String machineType, String jobName);
+
+  /**
+   * Return whether a reduce task from a given job can be run (wrt/ the
+   * scheduled pairing) on the given machine type.
+   *
+   * @param machineType The machine type name.
+   * @param The job name.
+   *
+   * @return True if a reduce task from the job can be run on the machine type,
+   *         false otherwise.
+   */
+  public abstract boolean matchReduce(String machineType, String jobName);
+
+  /**
+   * Return a collection of jobs that are currently eligible for execution,
+   * given a collection of finished jobs.
+   *
+   * @param finishedJobs A collection of jobs which have finished execution, as
+   *          identified by their name. If no jobs are currently finished, null
+   *          or an empty collection may be passed to the function.
+   *
+   * @return A collection of jobs that are eligible for execution, as identified
+   *         by their name.
+   */
+  public abstract Collection<String> getExecutableJobs(
+      Collection<String> finishedJobs);
 
   @Override
   public abstract void readFields(DataInput in) throws IOException;

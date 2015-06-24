@@ -36,6 +36,7 @@ import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 
 public class WorkflowUtil {
 
+  @Deprecated
   public static class MachineTypeJobNamePair implements Writable {
     String machineType;
     String jobName;
@@ -142,6 +143,7 @@ public class WorkflowUtil {
       LOG.info("Total Disk Space: " + mType.getAvailableSpace());
       LOG.info("Charge Rate: " + mType.getChargeRate());
     }
+    LOG.info("");
   }
 
   public static void printMachinesInfo(Map<String, ResourceStatus> machines) {
@@ -156,6 +158,7 @@ public class WorkflowUtil {
       LOG.info("Map slots: " + machineStatus.getMaxMapSlots());
       LOG.info("Reduce slots: " + machineStatus.getMaxReduceSlots());
     }
+    LOG.info("");
   }
 
   public static void printTableInfo(Map<TableKey, TableEntry> table) {
@@ -166,5 +169,6 @@ public class WorkflowUtil {
           + (entry.isMapTask ? "map" : "red") + ": " + entry.execTime
           + "seconds, $" + entry.cost);
     }
+    LOG.info("");
   }
 }

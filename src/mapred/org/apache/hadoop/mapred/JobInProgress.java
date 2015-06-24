@@ -1020,7 +1020,7 @@ public class JobInProgress {
    * Get the job configuration
    * @return the job's configuration
    */
-  JobConf getJobConf() {
+  public JobConf getJobConf() {
     return conf;
   }
     

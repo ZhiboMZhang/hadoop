@@ -19,8 +19,8 @@ package org.apache.hadoop.mapred.workflow;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.HashSet;
-import java.util.Set;
 
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
@@ -40,56 +40,123 @@ public class WorkflowStatus implements Writable {
   private String failureInfo = "NA";
   private long submissionTime = -1;
 
-  private Set<String> prepJobs;
-  private Set<String> submittedJobs;
-  private Set<String> runningJobs;
-  private Set<String> finishedJobs;  // Equal to succeeded jobs.
+  private Collection<String> prepJobs;
+  private Collection<String> submittedJobs;
+  private Collection<String> runningJobs;
+  private Collection<String> finishedJobs;  // Equal to succeeded jobs.
 
   // Required for readFields()/reflection when building the object.
-  public WorkflowStatus() {}
+  public WorkflowStatus() {
+    prepJobs = new HashSet<String>();
+    submittedJobs = new HashSet<String>();
+    runningJobs = new HashSet<String>();
+    finishedJobs = new HashSet<String>();
+  }
 
   public WorkflowStatus(WorkflowID workflowId) {
+    this();
     this.workflowId = workflowId;
-
-    this.prepJobs = new HashSet<String>();
-    this.submittedJobs = new HashSet<String>();
-    this.runningJobs = new HashSet<String>();
-    this.finishedJobs = new HashSet<String>();
   }
+
+  // TODO: failed jobs set..
+  // TODO: job submitted for a workflow which actually doesn't contain it..
+  // TODO: for all of them.. what if job is in the wrong state?
+  // TODO: --> pass in workflowConf on construction, use it to block adding of
+  // jobs which aren't in the workflow configuration?
+  // TODO: any need to be synchronized, and with what lock?
 
   /**
    * Add a job to the list of jobs which have not yet been submitted.
    *
-   * @param jobId A string representing the JobID of the job to add.
+   * @param jobName A string representing the name of the job to add.
    */
-  public void addPrepJob(String jobId) {
-    prepJobs.add(jobId);
+  public void addPrepJob(String jobName) {
+    prepJobs.add(jobName);
   }
 
-  // TODO: job submitted for a workflow which actually doesn't contain it..
-  // TODO: for all of them.. what if job is in the wrong state?
-  // TODO: any need to be synchronized, and with what lock?
-  public void addSubmittedJob(String jobId) {
-    prepJobs.remove(jobId);
-    submittedJobs.add(jobId);
-    runState = RunState.SUBMITTED;
+  /**
+   * Add a job to the list of jobs which have been submitted but are not yet
+   * running.
+   *
+   * @param jobName A string representing the name of the job to add.
+   */
+  public void addSubmittedJob(String jobName) {
+    prepJobs.remove(jobName);
+    submittedJobs.add(jobName);
+
+    if (runState == RunState.PREP) {
+      runState = RunState.SUBMITTED;
+    }
   }
 
-  public void addRunningJob(String jobId) {
-    submittedJobs.remove(jobId);
-    runningJobs.add(jobId);
-    runState = RunState.RUNNING;
+  /** Add a job to the list of jobs which are running but are not yet finished.
+   *
+   * @param jobName A string representing the name of the job to add.
+   */
+  public void addRunningJob(String jobName) {
+    submittedJobs.remove(jobName);
+    runningJobs.add(jobName);
+
+    if (runState == RunState.SUBMITTED) {
+      runState = RunState.RUNNING;
+    }
   }
 
-  public void addFinishedJob(String jobId) {
-    runningJobs.remove(jobId);
-    finishedJobs.add(jobId);
+  /**
+   * Add a job to the list of jobs which have finished running (successfully).
+   *
+   * @param jobName A string representing the name of the job to add.
+   */
+  public void addFinishedJob(String jobName) {
+    runningJobs.remove(jobName);
+    finishedJobs.add(jobName);
 
     if (isFinished()) {
       runState = RunState.SUCCEEDED;
     }
   }
 
+  /**
+   * Return a collection of jobs which are in the preparation stage.
+   *
+   * @return A collection of jobs, identified by their job name.
+   */
+  public Collection<String> getPrepJobs() {
+    return new HashSet<String>(prepJobs);
+  }
+
+  /**
+   * Return a collection of jobs which have been submitted.
+   *
+   * @return A collection of jobs, identified by their job name.
+   */
+  public Collection<String> getSubmittedJobs() {
+    return new HashSet<String>(submittedJobs);
+  }
+
+  /**
+   * Return a collection of jobs which are currently running.
+   *
+   * @return A collection of jobs, identified by their job name.
+   */
+  public Collection<String> getRunningJobs() {
+    return new HashSet<String>(runningJobs);
+  }
+
+  /**
+   * Return a collection of finished jobs.
+   *
+   * @return A collection of finished jobs, identified by their job name.
+   */
+  public Collection<String> getFinishedJobs() {
+    return new HashSet<String>(finishedJobs);
+  }
+
+  /**
+   * Report whether the workflow is finished.
+   *
+   * @return True if the workflow is finished, false otherwise.
+   */
   public boolean isFinished() {
     return prepJobs.isEmpty() && submittedJobs.isEmpty()
         && runningJobs.isEmpty();
@@ -100,7 +167,7 @@ public class WorkflowStatus implements Writable {
    *
    * @return The current run state of the workflow.
    */
-  public RunState getRunState() {
+  public synchronized RunState getRunState() {
     return runState;
   }
 
@@ -157,6 +224,19 @@ public class WorkflowStatus implements Writable {
     workflowId.write(out);
     Text.writeString(out, failureInfo);
     out.writeLong(submissionTime);
+
+    writeJobSet(out, prepJobs);
+    writeJobSet(out, submittedJobs);
+    writeJobSet(out, runningJobs);
+    writeJobSet(out, finishedJobs);
+  }
+
+  private void writeJobSet(DataOutput out, Collection<String> jobs)
+      throws IOException {
+    out.writeInt(jobs.size());
+    for (String job : jobs) {
+      Text.writeString(out, job);
+    }
   }
 
   @Override
@@ -165,6 +245,18 @@ public class WorkflowStatus implements Writable {
     workflowId.readFields(in);
     failureInfo = Text.readString(in);
     submissionTime = in.readLong();
+
+    readJobSet(in, prepJobs);
+    readJobSet(in, submittedJobs);
+    readJobSet(in, runningJobs);
+    readJobSet(in, finishedJobs);
+  }
+
+  private void readJobSet(DataInput in, Collection<String> jobs)
+      throws IOException {
+    for (int numJobs = in.readInt(); numJobs > 0; numJobs--) {
+      jobs.add(Text.readString(in));
+    }
   }
 
 }

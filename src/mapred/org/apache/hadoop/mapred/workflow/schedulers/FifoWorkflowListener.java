@@ -51,8 +51,8 @@ public class FifoWorkflowListener extends JobInProgressListener implements
 
   public FifoWorkflowListener() {
     jobs = new HashMap<JobID, JobInProgress>();
-    workflows = new LinkedHashMap<WorkflowID, WorkflowInProgress>();
-    queue = new HashMap<SchedulingInfo, Object>();
+    workflows = new HashMap<WorkflowID, WorkflowInProgress>();
+    queue = new LinkedHashMap<SchedulingInfo, Object>();
   }
 
   /**
@@ -73,7 +73,7 @@ public class FifoWorkflowListener extends JobInProgressListener implements
 
     // Add all workflow jobs to WorkflowStatus in PREP state.
     for (JobConf conf : workflow.getConf().getJobs().values()) {
-      workflow.getStatus().addPrepJob(conf.getJobId());
+      workflow.getStatus().addPrepJob(conf.getJobName());
     }
   }
 
@@ -101,7 +101,7 @@ public class FifoWorkflowListener extends JobInProgressListener implements
     if (workflowId != null) {
       LOG.info("Added job is a workflow job.");
       WorkflowInProgress workflow = workflows.get(workflowId);
-      workflow.getStatus().addRunningJob(job.getJobID().toString());
+      workflow.getStatus().addRunningJob(job.getJobConf().getJobName());
     }
   }
 
@@ -126,7 +126,7 @@ public class FifoWorkflowListener extends JobInProgressListener implements
 
           JobStatus oldStatus = statusEvent.getOldStatus();
           JobSchedulingInfo info = new JobSchedulingInfo(oldStatus);
-          JobInProgress job = event.getJobInProgress();
+          JobInProgress job = statusEvent.getJobInProgress();
           WorkflowID workflowId = job.getStatus().getWorkflowId();
           LOG.info("WORKFLOW: jobUpdated: workflowId is: " + workflowId);
 
@@ -141,7 +141,7 @@ public class FifoWorkflowListener extends JobInProgressListener implements
             WorkflowInProgress workflow = workflows.get(workflowId);
             WorkflowStatus workflowStatus = workflow.getStatus();
 
-            workflowStatus.addFinishedJob(info.getJobId().toString());
+            workflowStatus.addFinishedJob(job.getJobConf().getJobName());
 
             // Check the workflow status.
             if (workflow.getStatus().isFinished()) {

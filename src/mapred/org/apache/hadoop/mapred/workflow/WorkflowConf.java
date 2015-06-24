@@ -88,6 +88,8 @@ public class WorkflowConf extends Configuration implements Writable {
 
   /**
    * Return the {@link JobConf jobs} which comprise the workflow.
+   *
+   * The returned collection maps unique job names to their job configuration.
    */
   public Map<String, JobConf> getJobs() {
     return jobs;

@@ -29,13 +29,12 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapred.JobStatusChangeEvent.EventType;
-import org.apache.hadoop.util.StringUtils;
 
 /**
  * A {@link JobInProgressListener} which initializes the tasks for a job as soon
  * as the job is added (using the {@link #jobAdded(JobInProgress)} method).
  */
-class EagerTaskInitializationListener extends JobInProgressListener {
+public class EagerTaskInitializationListener extends JobInProgressListener {
   
   private static final int DEFAULT_NUM_THREADS = 4;
   private static final Log LOG = LogFactory.getLog(
