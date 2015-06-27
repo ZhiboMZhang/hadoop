@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
@@ -29,6 +31,8 @@ import org.apache.hadoop.io.Writable;
  * Describes the current status of a workflow.
  */
 public class WorkflowStatus implements Writable {
+
+  private static final Log LOG = LogFactory.getLog(WorkflowStatus.class);
 
   public enum RunState {
     PREP, SUBMITTED, RUNNING, SUCCEEDED, FAILED, KILLED
@@ -38,7 +42,7 @@ public class WorkflowStatus implements Writable {
   private WorkflowID workflowId;
   private RunState runState = RunState.PREP;
   private String failureInfo = "NA";
-  private long submissionTime = -1;
+  private long submissionTime = -1L;
 
   private Collection<String> prepJobs;
   private Collection<String> submittedJobs;
@@ -70,8 +74,9 @@ public class WorkflowStatus implements Writable {
    *
    * @param jobName A string representing the name of the job to add.
    */
-  public void addPrepJob(String jobName) {
+  public synchronized void addPrepJob(String jobName) {
     prepJobs.add(jobName);
+    LOG.info("Added job to prepJobs. " + jobName);
   }
 
   /**
@@ -80,12 +85,15 @@ public class WorkflowStatus implements Writable {
    *
    * @param jobName A string representing the name of the job to add.
    */
-  public void addSubmittedJob(String jobName) {
-    prepJobs.remove(jobName);
-    submittedJobs.add(jobName);
+  public synchronized void addSubmittedJob(String jobName) {
+    boolean success = prepJobs.remove(jobName);
+    if (success) { submittedJobs.add(jobName); }
+    LOG.info((success ? "Added" : "Did not add") + " job to submittedJobs. "
+        + jobName);
 
     if (runState == RunState.PREP) {
       runState = RunState.SUBMITTED;
+      LOG.info("Updating workflow status to submitted.");
     }
   }
 
@@ -93,12 +101,15 @@ public class WorkflowStatus implements Writable {
    *
    * @param jobName A string representing the name of the job to add.
    */
-  public void addRunningJob(String jobName) {
-    submittedJobs.remove(jobName);
-    runningJobs.add(jobName);
+  public synchronized void addRunningJob(String jobName) {
+    boolean success = submittedJobs.remove(jobName);
+    if (success) { runningJobs.add(jobName); }
+    LOG.info((success ? "Added" : "Did not add") + " job to runningJobs. "
+        + jobName);
 
     if (runState == RunState.SUBMITTED) {
       runState = RunState.RUNNING;
+      LOG.info("Updating workflow status to running.");
     }
   }
 
@@ -107,12 +118,15 @@ public class WorkflowStatus implements Writable {
    *
    * @param jobName A string representing the name of the job to add.
    */
-  public void addFinishedJob(String jobName) {
-    runningJobs.remove(jobName);
-    finishedJobs.add(jobName);
+  public synchronized void addFinishedJob(String jobName) {
+    boolean success = runningJobs.remove(jobName);
+    if (success) { finishedJobs.add(jobName); }
+    LOG.info((success ? "Added" : "Did not add") + " job to finishedJobs. "
+        + jobName);
 
     if (isFinished()) {
       runState = RunState.SUCCEEDED;
+      LOG.info("Updating workflow status to finished/succeeded.");
     }
   }
 
@@ -121,7 +135,7 @@ public class WorkflowStatus implements Writable {
    *
    * @return A collection of jobs, identified by their job name.
    */
-  public Collection<String> getPrepJobs() {
+  public synchronized Collection<String> getPrepJobs() {
     return new HashSet<String>(prepJobs);
   }
 
@@ -130,7 +144,7 @@ public class WorkflowStatus implements Writable {
    *
    * @return A collection of jobs, identified by their job name.
    */
-  public Collection<String> getSubmittedJobs() {
+  public synchronized Collection<String> getSubmittedJobs() {
     return new HashSet<String>(submittedJobs);
   }
 
@@ -139,7 +153,7 @@ public class WorkflowStatus implements Writable {
    *
    * @return A collection of jobs, identified by their job name.
    */
-  public Collection<String> getRunningJobs() {
+  public synchronized Collection<String> getRunningJobs() {
     return new HashSet<String>(runningJobs);
   }
 
@@ -148,7 +162,7 @@ public class WorkflowStatus implements Writable {
    *
    * @return A collection of finished jobs, identified by their job name.
    */
-  public Collection<String> getFinishedJobs() {
+  public synchronized Collection<String> getFinishedJobs() {
     return new HashSet<String>(finishedJobs);
   }
 
@@ -157,9 +171,8 @@ public class WorkflowStatus implements Writable {
    *
    * @return True if the workflow is finished, false otherwise.
    */
-  public boolean isFinished() {
-    return prepJobs.isEmpty() && submittedJobs.isEmpty()
-        && runningJobs.isEmpty();
+  public synchronized boolean isFinished() {
+    return prepJobs.isEmpty() && submittedJobs.isEmpty() && runningJobs.isEmpty();
   }
 
   /**
@@ -222,6 +235,7 @@ public class WorkflowStatus implements Writable {
   @Override
   public void write(DataOutput out) throws IOException {
     workflowId.write(out);
+    Text.writeString(out, runState.name());
     Text.writeString(out, failureInfo);
     out.writeLong(submissionTime);
 
@@ -243,6 +257,7 @@ public class WorkflowStatus implements Writable {
   public void readFields(DataInput in) throws IOException {
     workflowId = new WorkflowID();
     workflowId.readFields(in);
+    runState = RunState.valueOf(Text.readString(in));
     failureInfo = Text.readString(in);
     submissionTime = in.readLong();
 
@@ -254,7 +269,8 @@ public class WorkflowStatus implements Writable {
 
   private void readJobSet(DataInput in, Collection<String> jobs)
       throws IOException {
-    for (int numJobs = in.readInt(); numJobs > 0; numJobs--) {
+    int numJobs = in.readInt();
+    for (int i = 0; i < numJobs; i++) {
       jobs.add(Text.readString(in));
     }
   }

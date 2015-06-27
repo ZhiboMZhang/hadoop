@@ -20,7 +20,6 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -39,21 +38,19 @@ import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
-import org.apache.hadoop.mapred.workflow.schedulers.WorkflowUtil.MachineTypeJobNamePair;
+import org.apache.hadoop.mapreduce.TaskType;
 
 /**
  * A basic workflow scheduling plan, schedules jobs & their tasks in a first-in
  * first-out manner.
  */
-// TODO: how to handle no machines of the type we want to run on.
-// TODO: --> available resources don't match scheduling plan
 public class FifoSchedulingPlan extends SchedulingPlan {
 
   private static final Log LOG = LogFactory.getLog(FifoSchedulingPlan.class);
 
   private WorkflowDAG workflowDag;
 
-  private List<MachineTypeJobNamePair> taskMapping;  // machineType / jobName.[map|reduce]
+  private Map<String, WorkflowNode> taskMapping;  // machineType / job (tasks)
   private Map<String, String> trackerMapping;  // trackerName -> machineType
 
   // We can assume that all tasks have the same execution time (which is given).
@@ -94,8 +91,8 @@ public class FifoSchedulingPlan extends SchedulingPlan {
 
     // Set all machines to use the least expensive machine type.
     for (WorkflowNode node : workflowDag.getNodes()) {
-      for (int task = 0; task < node.getNumTasks(); task++) {
-        node.setMachineType(task, sortedMachineTypes.get(0).getName());
+      for (WorkflowTask task : node.getTasks()) {
+        task.setMachineType(sortedMachineTypes.get(0).getName());
       }
     }
     LOG.info("Set all nodes in workflow dag to least expensive type.");
@@ -124,52 +121,48 @@ public class FifoSchedulingPlan extends SchedulingPlan {
     // Just use a basic metric, reschedule the slowest task.
     do {
 
-      WorkflowNode slowestNode = null;
-      int slowestTask = -1;
+      WorkflowTask slowestTask = null;
       float maxTime = 0;
 
       // Find the slowest task.
       for (WorkflowNode node : criticalPath) {
-        for (int task = 0; task < node.getNumTasks(); task++) {
+        for (WorkflowTask task : node.getTasks()) {
 
-          if (unReschedulableNodes.contains(new WorkflowTask(node, task))) {
-            LOG.info("unReschedulableNodes contains " + node.getName() + ":" + task);
+          if (unReschedulableNodes.contains(task)) {
+            LOG.info("Can't reschedule " + node.toString() + ", continuing.");
             continue;
           }
 
-          String type = node.getMachineType(task);
-          TableKey key = new TableKey(node.getJob(), type, node.isMapStage());
+          String type = task.getMachineType();
+          TableKey key = new TableKey(node.getJobName(), type, task.isMapTask());
           float time = table.get(key).execTime;
 
           if (time > maxTime) {
             maxTime = time;
-            slowestNode = node;
             slowestTask = task;
           }
         }
       }
 
       // No nodes on the critical path are able to be rescheduled.
-      if (slowestNode == null) { break; }
-
-      LOG.info("Slowest task on critical path is: " + slowestNode.getName()
-          + ":" + slowestTask);
+      if (slowestTask == null) { break; }
+      LOG.info("Slowest task on critical path is: " + slowestTask.getName());
 
       // Update the machine type.
-      String prevType = slowestNode.getMachineType(slowestTask);
+      String prevType = slowestTask.getMachineType();
       int prevTypeIdx = sortedMachineTypes.indexOf(machineType.get(prevType));
 
       if (sortedMachineTypes.size() == (prevTypeIdx + 1)) {
         // Can't reschedule the slowest node.
         // It's already running on the quickest machine
         LOG.info("Slowest task is already scheduled on the quickest machine.");
-        unReschedulableNodes.add(new WorkflowTask(slowestNode, slowestTask));
+        unReschedulableNodes.add(slowestTask);
 
       } else {
 
         String newType = sortedMachineTypes.get(prevTypeIdx + 1).getName();
-        slowestNode.setMachineType(slowestTask, newType);
-        LOG.info("Updated machine type on " + slowestNode.getName() + " from "
+        slowestTask.setMachineType(newType);
+        LOG.info("Updated machine type on " + slowestTask.getName() + " from "
             + prevType + " to " + newType);
 
         // Check if the reschedule has increased the cost over the given budget.
@@ -180,8 +173,8 @@ public class FifoSchedulingPlan extends SchedulingPlan {
         if (workflowCost > constraintCost) {
           // Cost is now above the constraint, undo & attempt w/ other tasks.
           LOG.info("Cost is now above budget constraint, continuing.");
-          slowestNode.setMachineType(slowestTask, prevType);
-          unReschedulableNodes.add(new WorkflowTask(slowestNode, slowestTask));
+          slowestTask.setMachineType(prevType);
+          unReschedulableNodes.add(slowestTask);
         } else {
           // Reschedule was fine, recompute the critical path.
           LOG.info("Reschedule was under budget, recomputing critical path.");
@@ -197,16 +190,11 @@ public class FifoSchedulingPlan extends SchedulingPlan {
     // WorkflowNode represents a task to be executed (WorkflowNodes are
     // repeated).
 
-    taskMapping = new ArrayList<MachineTypeJobNamePair>();
-    List<WorkflowNode> ordering = workflowDag.getTopologicalOrdering();
+    taskMapping = new HashMap<String, WorkflowNode>();
 
-    for (WorkflowNode node : ordering) {
-      for (int task = 0; task < node.getNumTasks(); task++) {
-        MachineType type = machineType.get(node.getMachineType(task));
-        taskMapping.add(new MachineTypeJobNamePair(type.getName(), node
-            .getName()));
-        LOG.info("Added pair: " + node.getName() + "/" + type.getName());
-      }
+    for (WorkflowNode node : workflowDag.getNodes()) {
+      taskMapping.put(node.getJobName(), node);
+      LOG.info("Added pair: " + node.getJobName() + "/" + node);
     }
 
     // Get a mapping between actual available machines and machine types.
@@ -226,27 +214,29 @@ public class FifoSchedulingPlan extends SchedulingPlan {
   @Override
   public boolean matchMap(String machineType, String jobName) {
     LOG.info("In matchMap function");
-    return match(machineType, jobName, "map");
+    return match(machineType, jobName, TaskType.MAP);
   }
 
   @Override
   public boolean matchReduce(String machineType, String jobName) {
     LOG.info("In matchReduce function");
-    return match(machineType, jobName, "red");
+    return match(machineType, jobName, TaskType.REDUCE);
   }
 
-  private boolean match(String machineType, String jobName, String taskType) {
-    LOG.info("Match input is " + machineType + "/" + jobName + "/" + taskType);
-    for (MachineTypeJobNamePair pair : taskMapping) {
-      String jobTaskName = pair.jobName;
-      // TODO: better way to store task type.
-      // --> WorkflowNode appends .map/.reduce to name
-      String task = jobTaskName.substring(jobTaskName.lastIndexOf('.') + 1);
-      String job = jobTaskName.substring(0, jobTaskName.lastIndexOf('.'));
-      LOG.info("vs: " + pair.machineType + "/" + job + "/" + task);
+  private boolean match(String machineType, String jobName, TaskType taskType) {
 
-      if (pair.machineType.equals(machineType) && job.equals(jobName)
-          && task.equals(taskType)) {
+    Collection<WorkflowTask> tasks = taskMapping.get(jobName).getTasks();
+
+    for (WorkflowTask task : tasks) {
+      String machine = task.getMachineType();
+      String name = task.getJobName();
+      TaskType type = (task.isMapTask() ? TaskType.MAP : TaskType.REDUCE);
+
+      LOG.info("Match input is " + machineType + "/" + jobName + "/" + taskType);
+      LOG.info("vs: " + machine + "/" + name + "/" + type);
+
+      if (machine.equals(machineType) && name.equals(jobName)
+          && type.equals(taskType)) {
         LOG.info("Found a match!");
         // TODO: update counters, but only if scheduler actually schedules..?
         // ...and task had to be successful.. hmm
@@ -260,20 +250,16 @@ public class FifoSchedulingPlan extends SchedulingPlan {
 
   @Override
   // TODO: what if first call finishedJobs isn't null --> error checking
-  // TODO: currently considers both map & reduce stage as the same 'Job',
-  // prevents job from entering finished state correctly.
   public Collection<String> getExecutableJobs(Collection<String> finishedJobs) {
 
-    LOG.info("in getExecutableJobs");
+    LOG.info("In getExecutableJobs.");
     Set<String> executableJobs = new HashSet<String>();
 
     // If there are no finished jobs then return the entry nodes.
     if (finishedJobs == null || finishedJobs.size() == 0) {
       for (WorkflowNode node : workflowDag.getEntryNodes()) {
-        executableJobs.add(node.getJob());
+        executableJobs.add(node.getJobName());
       }
-      LOG.info("finishedJobs is empty, returning entry nodes: "
-          + Arrays.toString(executableJobs.toArray()));
       return executableJobs;
     }
 
@@ -281,8 +267,12 @@ public class FifoSchedulingPlan extends SchedulingPlan {
     // is the same as we previously sent, then nothing needs to be done.
     // Otherwise, the new finished jobs determine the next executable jobs.
     Set<String> finishedJobsSet = new HashSet<String>(finishedJobs);
-    if (prevFinishedJobs.equals(finishedJobsSet)) {
-      LOG.info("Set of input finishedjobs is the same as was returned, exiting.");
+    if (finishedJobs.size() == workflowDag.getNodes().size()) {
+      LOG.info("All jobs are finished, returning the empty set.");
+      executableJobs.clear();
+      return executableJobs;
+    } else if (prevFinishedJobs.equals(finishedJobsSet)) {
+      LOG.info("Set of finished jobs is the same as before (no progress made).");
       return prevFinishedJobs;
     } else {
       // Modify finishedJobs so that we only consider newly finished jobs.
@@ -294,7 +284,7 @@ public class FifoSchedulingPlan extends SchedulingPlan {
     // TODO: better
     Map<String, WorkflowNode> map = new HashMap<String, WorkflowNode>();
     for (WorkflowNode node : workflowDag.getNodes()) {
-      map.put(node.getJob(), node);
+      map.put(node.getJobName(), node);
     }
 
     // A successor of a finished job is eligible for execution if all of its
@@ -306,11 +296,16 @@ public class FifoSchedulingPlan extends SchedulingPlan {
       boolean predecessorsFinished = true;
 
       for (WorkflowNode successor : workflowDag.getSuccessors(map.get(job))) {
+        newJob = successor.getJobName();
+        LOG.info("Looking at finished job's successor " + successor.getJobName());
         for (WorkflowNode predecessor : workflowDag.getPredecessors(successor)) {
-          newJob = predecessor.getJob();
-          if (!finishedJobs.contains(newJob)
-              && !prevFinishedJobs.contains(newJob)) {
+          String pre = predecessor.getJobName();
+          LOG.info("Checking successor's dependency " + pre);
+          if (!finishedJobs.contains(pre) && !prevFinishedJobs.contains(pre)) {
+            LOG.info("The job " + pre + " isn't finished.");
             predecessorsFinished = false;
+          } else {
+            LOG.info("The job " + pre + " is finished.");
           }
         }
       }
@@ -334,12 +329,13 @@ public class FifoSchedulingPlan extends SchedulingPlan {
     workflowDag = new WorkflowDAG();
     workflowDag.readFields(in);
 
-    taskMapping = new ArrayList<MachineTypeJobNamePair>();
+    taskMapping = new HashMap<String, WorkflowNode>();
     int numTaskMappings = in.readInt();
     for (int i = 0; i < numTaskMappings; i++) {
-      MachineTypeJobNamePair pair = new MachineTypeJobNamePair();
-      pair.readFields(in);
-      taskMapping.add(pair);
+      String key = Text.readString(in);
+      WorkflowNode value = new WorkflowNode();
+      value.readFields(in);
+      taskMapping.put(key, value);
     }
 
     trackerMapping = new HashMap<String, String>();
@@ -363,8 +359,9 @@ public class FifoSchedulingPlan extends SchedulingPlan {
     workflowDag.write(out);
 
     out.writeInt(taskMapping.size());
-    for (MachineTypeJobNamePair pair : taskMapping) {
-      pair.write(out);
+    for (String key : taskMapping.keySet()) {
+      Text.writeString(out, key);
+      taskMapping.get(key).write(out);
     }
 
     out.writeInt(trackerMapping.size());

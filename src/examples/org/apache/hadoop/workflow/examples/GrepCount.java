@@ -40,15 +40,15 @@ public class GrepCount {
     // Specify the jobs that comprise the workflow.
     // Also each job may or may not require command-line parameters.
     workflowConf.addJob("Grep", "grep.jar");
-    workflowConf.addJob("WordCount", "wordcount.jar");
+    workflowConf.addJob("WordCountOld", "wordcountold.jar");
 
     workflowConf.setJobMainClass("Grep", "org.apache.hadoop.examples.Grep");
     workflowConf.setJobArguments("Grep", "you");
 
-    workflowConf.setJobMainClass("WordCount", "org.apache.hadoop.examples.WordCount");
+    workflowConf.setJobMainClass("WordCountOld", "org.apache.hadoop.examples.WordCountOld");
 
     // And we need to specify for each job its predecessors (if any).
-    workflowConf.addDependency("WordCount", "Grep");
+    workflowConf.addDependency("Grep", "WordCountOld");
 
     // We also need to specify the input dataset.
     FileInputFormat.setInputPaths(workflowConf, new Path(args[0]));

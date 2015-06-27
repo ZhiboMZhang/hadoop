@@ -19,138 +19,98 @@ package org.apache.hadoop.mapred.workflow.schedulers;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
 /**
- * Represent a node/stage in a {@link WorkflowDAG}.
+ * Represent a node/job in a {@link WorkflowDAG}.
  */
 public class WorkflowNode implements Writable {
 
-  private String name;
-  private String job;
-  private boolean isMapStage = true;
-  private String machineTypes[];
+  private String jobName;
+  private List<WorkflowTask> tasks;
 
   /**
    * Only to be used when calling readFields() afterwards.
    */
-  public WorkflowNode() {}
+  public WorkflowNode() {
+    tasks = new ArrayList<WorkflowTask>();
+  }
 
   /**
    * Create a WorkflowNode.
    *
-   * In a WorkflowDAG, WorkflowNodes represent the map/reduce stages of a job.
+   * In a WorkflowDAG, WorkflowNodes represent the jobs to be executed.
    *
-   * @param job The name of the job.
-   * @param numTasks The number of tasks that the job is to execute.
-   * @param isMapStage Whether the tasks are map or reduce tasks.
+   * @param job The unique job name.
+   * @param numMapTasks The number of map tasks that the job is to execute.
+   * @param numRedTasks The number of reduce tasks that the job is to execute.
    */
-  public WorkflowNode(String job, int numTasks, boolean isMapStage) {
-    this.job = job;
-    this.isMapStage = isMapStage;
+  public WorkflowNode(String job, int numMapTasks, int numRedTasks) {
+    this();
 
-    this.name = job + (isMapStage ? ".map" : ".red");
-    this.machineTypes = new String[numTasks];
+    this.jobName = job;
+    for (int i = 0; i < numMapTasks; i++) {
+      tasks.add(new WorkflowTask(this, true));
+    }
+    for (int i = 0; i < numRedTasks; i++) {
+      tasks.add(new WorkflowTask(this, false));
+    }
   }
 
-  @Deprecated
-  public String getName() {
-    return name;
+  /**
+   * Return the name of the job this workflow node represents.
+   */
+  public String getJobName() {
+    return jobName;
   }
 
-  public String getJob() {
-    return job;
+  /**
+   * Return a collection of the tasks belonging to this job/node.
+   */
+  public Collection<WorkflowTask> getTasks() {
+    return tasks;
   }
 
-  public boolean isMapStage() {
-    return isMapStage;
-  }
-
+  /**
+   * Return the number of tasks this job/node has.
+   */
   public int getNumTasks() {
-    return machineTypes.length;
-  }
-
-  /**
-   * Get the machine type of a given task (identified by a value 0 -> numTasks).
-   * 
-   * @param taskNumber The task in the stage to get a machine type for.
-   * 
-   * @return The machine type name, or null if an invalid task value was input.
-   */
-  public String getMachineType(int taskNumber) {
-    if (taskNumber < 0 || taskNumber >= machineTypes.length) {
-      return null;
-    }
-    return machineTypes[taskNumber];
-  }
-
-  /**
-   * Set the machine type of the given task (identified by a value 0 ->
-   * numTasks).
-   * 
-   * @param taskNumber The task in the stage to set a machine type for.
-   * @param machineType The name of the machine type to use for the task.
-   * 
-   * @return True if the machine type was set, false otherwise.
-   */
-  public boolean setMachineType(int taskNumber, String machineType) {
-    if (taskNumber >= 0 && taskNumber < machineTypes.length) {
-      machineTypes[taskNumber] = machineType;
-      return true;
-    }
-    return false;
+    return tasks.size();
   }
 
   @Override
-  public int hashCode() {
-    return (name.hashCode() * job.hashCode()) + (isMapStage ? 1 : 0);
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-
-    if (obj == null) { return false; }
-    if (this == obj) { return true; }
-    if (getClass() != obj.getClass()) { return false; }
-
-    final WorkflowNode other = (WorkflowNode) obj;
-
-    if (machineTypes.length != other.machineTypes.length) { return false; }
-    for (int i = 0; i < machineTypes.length; i++) {
-      if (!machineTypes[i].equals(other.machineTypes[i])) { return false; }
+  public String toString() {
+    String rep = jobName + ": ";
+    for (WorkflowTask task : tasks) {
+      rep += task.toString() + ", ";
     }
-
-    if (name.equals(other.name) && job.equals(other.job)
-        && isMapStage == other.isMapStage) {
-      return true;
-    }
-
-    return false;
+    return rep;
   }
 
   @Override
   public void readFields(DataInput in) throws IOException {
-    name = Text.readString(in);
-    job = Text.readString(in);
-    isMapStage = in.readBoolean();
+    jobName = Text.readString(in);
 
-    machineTypes = new String[in.readInt()];
-    for (int i = 0; i < machineTypes.length; i++) {
-      machineTypes[i] = Text.readString(in);
+    int numTasks = in.readInt();
+    for (int i = 0; i < numTasks; i++) {
+      WorkflowTask task = new WorkflowTask();
+      task.readFields(in);
+      tasks.add(task);
     }
   }
 
   @Override
   public void write(DataOutput out) throws IOException {
-    Text.writeString(out, name);
-    Text.writeString(out, job);
-    out.writeBoolean(isMapStage);
+    Text.writeString(out, jobName);
 
-    out.writeInt(machineTypes.length);
-    for (String type : machineTypes) {
-      Text.writeString(out, type);
+    out.writeInt(tasks.size());
+    for (WorkflowTask task : tasks) {
+      task.write(out);
     }
   }
 

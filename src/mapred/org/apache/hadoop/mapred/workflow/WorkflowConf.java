@@ -204,16 +204,16 @@ public class WorkflowConf extends Configuration implements Writable {
   /**
    * Add a dependency to a job.
    *
-   * @param successor A unique job name.
-   * @param predecessor A unique job name.
+   * @param job A unique job name.
+   * @param dependency A unique job name.
    */
-  public void addDependency(String successor, String predecessor) {
-    Set<String> dependencies = this.dependencies.get(successor);
+  public void addDependency(String job, String dependency) {
+    Set<String> dependencies = this.dependencies.get(job);
     if (dependencies == null) {
       dependencies = new HashSet<String>();
-      this.dependencies.put(successor, dependencies);
+      this.dependencies.put(job, dependencies);
     }
-    dependencies.add(predecessor);
+    dependencies.add(dependency);
   }
 
   /**

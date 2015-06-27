@@ -47,12 +47,12 @@ public class FifoWorkflowListener extends JobInProgressListener implements
   private Map<WorkflowID, WorkflowInProgress> workflows;
 
   // A queue to hold both jobs and workflows in progress.
-  private Map<SchedulingInfo, Object> queue;
+  private Map<? super SchedulingInfo, Object> queue;
 
   public FifoWorkflowListener() {
     jobs = new HashMap<JobID, JobInProgress>();
     workflows = new HashMap<WorkflowID, WorkflowInProgress>();
-    queue = new LinkedHashMap<SchedulingInfo, Object>();
+    queue = new LinkedHashMap<Object, Object>();
   }
 
   /**
@@ -63,7 +63,8 @@ public class FifoWorkflowListener extends JobInProgressListener implements
   }
 
   @Override
-  public void workflowAdded(WorkflowInProgress workflow) throws IOException {
+  public synchronized void workflowAdded(WorkflowInProgress workflow)
+      throws IOException {
     // Keep a list of workflows to be executed.
     WorkflowID workflowId = workflow.getProfile().getWorkflowId();
     workflows.put(workflowId, workflow);
@@ -78,17 +79,17 @@ public class FifoWorkflowListener extends JobInProgressListener implements
   }
 
   @Override
-  public void workflowRemoved(WorkflowInProgress workflow) {
+  public synchronized void workflowRemoved(WorkflowInProgress workflow) {
     // Workflow will be removed once it completes.
   }
 
   @Override
-  public void workflowUpdated(WorkflowChangeEvent event) {
+  public synchronized void workflowUpdated(WorkflowChangeEvent event) {
     // TODO: Workflow updating currently not handled.
   }
 
   @Override
-  public void jobAdded(JobInProgress job) throws IOException {
+  public synchronized void jobAdded(JobInProgress job) throws IOException {
 
     LOG.info("Job added to listener queue.");
 
@@ -106,13 +107,13 @@ public class FifoWorkflowListener extends JobInProgressListener implements
   }
 
   @Override
-  public void jobRemoved(JobInProgress job) {
+  public synchronized void jobRemoved(JobInProgress job) {
     // Job will be removed once it completes.
   }
 
   @Override
   // Most code is taken from JobQueueJobInProgressListener.
-  public void jobUpdated(JobChangeEvent event) {
+  public synchronized void jobUpdated(JobChangeEvent event) {
 
     LOG.info("In jobUpdated function.");
     if (event instanceof JobStatusChangeEvent) {
@@ -127,21 +128,24 @@ public class FifoWorkflowListener extends JobInProgressListener implements
           JobStatus oldStatus = statusEvent.getOldStatus();
           JobSchedulingInfo info = new JobSchedulingInfo(oldStatus);
           JobInProgress job = statusEvent.getJobInProgress();
-          WorkflowID workflowId = job.getStatus().getWorkflowId();
-          LOG.info("WORKFLOW: jobUpdated: workflowId is: " + workflowId);
 
           // The job is finished, so either way remove it from the queue.
           queue.remove(info);
           jobs.remove(info.getJobId());
 
           // Job belongs to a workflow, remove it from the queue.
+          WorkflowID workflowId = job.getStatus().getWorkflowId();
+
           if (workflowId != null) {
+            LOG.info("jobUpdated: workflowId is: " + workflowId);
 
             // Update the workflow status.
             WorkflowInProgress workflow = workflows.get(workflowId);
             WorkflowStatus workflowStatus = workflow.getStatus();
 
-            workflowStatus.addFinishedJob(job.getJobConf().getJobName());
+            String jobName = job.getJobConf().getJobName();
+            workflowStatus.addFinishedJob(jobName);
+            LOG.info("updating workflow status, added finished job " + jobName);
 
             // Check the workflow status.
             if (workflow.getStatus().isFinished()) {

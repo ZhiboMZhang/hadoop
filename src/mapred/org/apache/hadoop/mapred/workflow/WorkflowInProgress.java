@@ -16,8 +16,6 @@
  */
 package org.apache.hadoop.mapred.workflow;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.mapred.JobTracker;
 
 /**
@@ -36,8 +34,6 @@ public class WorkflowInProgress {
       super(msg);
     }
   }
-
-  static final Log LOG = LogFactory.getLog(WorkflowInProgress.class);
 
   private WorkflowProfile profile;
   private WorkflowStatus status;

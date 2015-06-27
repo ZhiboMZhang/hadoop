@@ -38,8 +38,8 @@ public class WordCount {
     workflowConf.setConstraint(Constraints.DEADLINE, "600s");
 
     // Specify jobs in the workflow.
-    workflowConf.addJob("WordCount", "wordcount.jar");
-    workflowConf.setJobMainClass("WordCount", "org.apache.hadoop.examples.WordCount");
+    workflowConf.addJob("WordCountOld", "wordcountold.jar");
+    workflowConf.setJobMainClass("WordCountOld", "org.apache.hadoop.examples.WordCountOld");
 
     // Also specify the input dataset.
     FileInputFormat.setInputPaths(workflowConf, new Path(args[0]));

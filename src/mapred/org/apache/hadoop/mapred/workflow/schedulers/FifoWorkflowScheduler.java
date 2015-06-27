@@ -98,9 +98,9 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
   }
 
   @Override
-  // TODO
   // Called from JobTracker heartbeat function, which is called by a taskTracker
-  public List<Task> assignTasks(TaskTracker taskTracker) throws IOException {
+  public synchronized List<Task> assignTasks(TaskTracker taskTracker)
+      throws IOException {
 
     if (taskTrackerManager.isInSafeMode()) {
       LOG.info("JobTracker is in safe mode, not scheduling any tasks.");
@@ -126,7 +126,6 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
           JobInProgress job = (JobInProgress) object;
           LOG.info("Got job from queue.");
 
-          // TODO: job is not getting into running state
           if (job.getStatus().getRunState() != JobStatus.RUNNING) {
             LOG.info("Job is not in running state, continuing.");
             continue;
@@ -210,18 +209,15 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
           LOG.info("Got workflow from queue.");
 
           Collection<String> finishedJobs = workflow.getStatus().getFinishedJobs();
-          LOG.info("Workflowstatus finishedjobs: " + finishedJobs);
           Collection<String> jobNames = schedulingPlan.getExecutableJobs(finishedJobs);
+
+          LOG.info("Passed in finished jobs: " + finishedJobs);
+          LOG.info("Got back executable jobs: " + jobNames);
 
           if (jobNames == null || jobNames.size() == 0) {
             LOG.info("All workflow jobs have been started.");
             continue;
           }
-
-          // Log the jobs that can be run at this point of workflow execution.
-          String jobs = "";
-          for (String job : jobNames) { jobs += job + ", "; }
-          LOG.info("Got next jobs for workflow as: " + jobs);
 
           for (String jobName : jobNames) {
             // Skip the job if it has already been started.
@@ -259,7 +255,6 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
       }
     }).start();
   }
-
 
   // Check that the jar file has a manifest, and if not then add one.
   // Write configuration properties to the jar file's manifest.
@@ -316,7 +311,7 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
   }
 
   @Override
-  public Collection<JobInProgress> getJobs(String ignored) {
+  public synchronized Collection<JobInProgress> getJobs(String ignored) {
 
     // Both JobInProgress and WorkflowInProgress objects exist in the default
     // queue. Filter the queue to a Collection of JobInProgress objects.
@@ -331,8 +326,5 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
 
     return jobQueue;
   }
-
-  // TODO: checkJobSubmission ?? (superclass method does nothing)
-  // TODO: refresh ?? (superclass method does nothing)
 
 }

@@ -4,6 +4,7 @@ import org.apache.hadoop.mapred.workflow.WorkflowID;
 import org.apache.hadoop.mapred.workflow.WorkflowStatus;
 
 class WorkflowSchedulingInfo extends SchedulingInfo {
+
   private WorkflowID id;
 
   public WorkflowSchedulingInfo(WorkflowStatus status) {
@@ -16,17 +17,20 @@ class WorkflowSchedulingInfo extends SchedulingInfo {
   }
 
   @Override
+  public String toString() {
+    return "WorkflowSchedulingInfo: id: " + id.toString() + " startTime: "
+        + getStartTime();
+  }
+
+  @Override
   public boolean equals(Object object) {
-    if (!super.equals(object)) {
-      return false;
-    }
-    if (object == null || object.getClass() != WorkflowSchedulingInfo.class) {
-      return false;
-    } else if (object == this) {
-      return true;
-    } else if (object instanceof WorkflowSchedulingInfo) {
+    if (object == null) { return false; }
+    if (object.getClass() != WorkflowSchedulingInfo.class) { return false; }
+    if (object == this) { return true; }
+
+    if (object instanceof WorkflowSchedulingInfo) {
       WorkflowSchedulingInfo other = (WorkflowSchedulingInfo) object;
-      return (id.equals(other.id));
+      return id.equals(other.id) && getStartTime() == other.getStartTime();
     }
 
     return false;
@@ -34,7 +38,7 @@ class WorkflowSchedulingInfo extends SchedulingInfo {
 
   @Override
   public int hashCode() {
-    return (int) (id.hashCode() + getStartTime());
+    return id.hashCode();
   }
 
 }

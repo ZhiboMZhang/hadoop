@@ -39,6 +39,7 @@ import org.apache.hadoop.io.retry.RetryProxy;
 import org.apache.hadoop.io.retry.RetryUtils;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.mapred.ClusterStatus;
+import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobClient;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.JobID;
@@ -109,7 +110,7 @@ public class WorkflowClient extends Configured {
     @Override
     public boolean isSuccessful() throws IOException {
       updateStatus();
-      return status.getRunState() == WorkflowStatus.RunState.SUCCEEDED;
+      return (status.getRunState() == WorkflowStatus.RunState.SUCCEEDED);
     }
 
     @Override
@@ -381,7 +382,7 @@ public class WorkflowClient extends Configured {
           throw new IOException("Could not launch workflow.");
         }
 
-        // TODO: Clean up if things go wrong.
+        // TODO: Clean up.
       }
     });
   }
@@ -403,20 +404,19 @@ public class WorkflowClient extends Configured {
   /**
    * Update initial workflow job information.
    *
-   * This function initializes all workflow job's staging & submit directories,
-   * as well as setting up initial input and output directories. The number of
-   * map and reduce tasks are also updated in the {@link JobConf} class (so that
-   * they can be used by a scheduler/planner).
+   * This function initializes all workflow job's staging & submit directories.
+   * The number of map and reduce tasks are also updated in the {@link JobConf}
+   * class (so that they can be used by a scheduler/planner).
    */
   private void updateJobInfo(WorkflowConf workflow, WorkflowID workflowId)
       throws IOException, InterruptedException, ClassNotFoundException {
 
     LOG.info("In updateJobInfo.");
-    Map<String, JobConf> workflowJobs = workflow.getJobs();
+    Map<String, JobConf> jobs = workflow.getJobs();
 
-    for (String job : workflowJobs.keySet()) {
+    for (String job : jobs.keySet()) {
       LOG.info("Updating information for job: " + job);
-      JobConf jobConf = workflowJobs.get(job);
+      JobConf jobConf = jobs.get(job);
 
       // Staging & submit directories.
       Path stagingArea = WorkflowSubmissionFiles.getStagingDir(
@@ -429,7 +429,7 @@ public class WorkflowClient extends Configured {
       LOG.info("JobID:  " + jobId.toString());
       LOG.info("Path submitJobDir: " + submitJobDir.toString());
 
-      // Other information which hasn't been set yet.
+      // Other information that hasn't been set yet.
       jobConf.setWorkflowId(workflowId.toString());
       jobConf.setJobId(jobId.toString());
 
@@ -438,21 +438,11 @@ public class WorkflowClient extends Configured {
       // value is given in the configuration file.
       LOG.info("Set # of reduces: " + jobConf.getNumReduceTasks());
       LOG.info("Set # of maps: " + jobConf.getNumMapTasks());
-
-      // Set up input directories for all jobs.
-      String jobInputDir = jobConf.get("mapreduce.job.dir") + Path.SEPARATOR
-          + "input";
-      jobConf.set("mapred.input.dir", jobInputDir);
-
-      LOG.info("Temporary job input directory: " + jobInputDir);
-
-      // Set the main class from the parameters string (TODO:??)
-      // (Look through execution of job to see how this is handled.)
     }
   }
 
   /**
-   * Workflow job input and output paths are updated to their final values.
+   * Workflow job input and output paths are set to their final values.
    *
    * The function takes into account workflow job dependency information to
    * properly update input and output data paths between jobs.
@@ -461,55 +451,66 @@ public class WorkflowClient extends Configured {
 
     LOG.info("In updateJobIoPaths.");
 
-    Map<String, JobConf> workflowJobs = workflow.getJobs();
-    Map<String, Set<String>> dependencyMap = workflow.getDependencies();
-    Set<String> dependencies = new HashSet<String>();
+    Map<String, JobConf> jobs = workflow.getJobs();
+    Map<String, Set<String>> dependencies = workflow.getDependencies();
+    Set<String> deps = new HashSet<String>();  // Jobs that are dependencies.
 
-    String workflowInputDir = workflow.get("mapred.input.dir");
-    String workflowOutputDir = workflow.get("mapred.output.dir");
+    String workflowInput = workflow.get("mapred.input.dir");
+    String workflowOutput = workflow.get("mapred.output.dir");
 
-    LOG.info("Read workflowInputDir as: " + workflowInputDir);
-    LOG.info("Read workflowOutputDir as: " + workflowOutputDir);
+    LOG.info("Read workflowInputDir as: " + workflowInput);
+    LOG.info("Read workflowOutputDir as: " + workflowOutput);
+
+    // Set input and output directories for all jobs.
+    for (JobConf conf : jobs.values()) {
+      String jobName = conf.getJobName();
+      String output = Path.SEPARATOR + workflow.getWorkflowName() + "_" + jobName;
+      conf.setOutputDir(output);
+
+      LOG.info("Default job output directory: " + output);
+    }
 
     // Iterate through jobs with dependencies to set their in/output paths.
-    for (String job : dependencyMap.keySet()) {
-      JobConf jobConf = workflowJobs.get(job);
-      Set<String> jobDependencies = dependencyMap.get(job);
+    for (String successor : dependencies.keySet()) {
+      JobConf succ = jobs.get(successor);
+      String input = "";
 
-      // A job with x as a dependency will have its input as x's output.
-      String inputDir = jobConf.get("mapred.input.dir");
-      for (String dependency : jobDependencies) {
-        JobConf jobConfDependency = workflowJobs.get(dependency);
-        jobConfDependency.set("mapred.output.dir", inputDir);
-        dependencies.add(dependency);
+      // Add an input directory to each job for each of it's dependencies.
+      for (String dependency : dependencies.get(successor)) {
+        JobConf dep = jobs.get(dependency);
+        input += dep.getOutputDir() + ", ";
 
-        LOG.info("Set output of " + dependency + "(now: "
-            + jobConfDependency.get("mapred.output.dir") + ") to be input of "
-            + job + " (" + inputDir + ")");
+        deps.add(dependency);
       }
+
+      // Finalize the path and convert it to have a HDFS prefix.
+      input = input.substring(0, input.length() - 2);
+      FileInputFormat.setInputPaths(succ, input);
+
+      LOG.info("Set " + succ.getJobName() + " input as " + succ.getInputDir());
     }
 
-    // Jobs with no dependencies are entry jobs.
-    for (String job : workflow.getJobs().keySet()) {
-      if (dependencyMap.get(job) == null) {
-        JobConf jobConf = workflowJobs.get(job);
-        jobConf.set("mapred.input.dir", workflowInputDir);
+    // Deal with exit and entry jobs.
+    for (String job : jobs.keySet()) {
+      JobConf jobConf = jobs.get(job);
+
+      // Jobs with no dependencies are entry jobs.
+      if (dependencies.get(job) == null) {
+        jobConf.setInputDir(workflowInput);
 
         LOG.info("Set input of " + job + " (now: "
-            + jobConf.get("mapred.input.dir") + ") to be " + workflowInputDir);
+            + jobConf.get("mapred.input.dir") + ") to be " + workflowInput);
       }
-    }
 
-    // Jobs that aren't dependencies for any other jobs are exit jobs.
-    for (String job : workflow.getJobs().keySet()) {
-      if (!dependencies.contains(job)) {
-        JobConf jobConf = workflowJobs.get(job);
-        jobConf.set("mapred.output.dir", workflowOutputDir);
+      // Jobs that aren't dependencies for any other jobs are exit jobs.
+      if (!deps.contains(job)) {
+        jobConf.setOutputDir(workflowOutput);
 
         LOG.info("Set output of " + job + "(now: "
-            + jobConf.get("mapred.output.dir") + ") to be " + workflowOutputDir);
+            + jobConf.get("mapred.output.dir") + ") to be " + workflowOutput);
       }
     }
+
   }
 
   /**
@@ -586,26 +587,6 @@ public class WorkflowClient extends Configured {
         replication);
 
     LOG.info("Wrote workflow configuration into " + confDir);
-
-    // Create input & output directories for workflow jobs.
-    Path workflowInput = new Path(workflow.get("mapred.input.dir"));
-    Path workflowOutput = new Path(workflow.get("mapred.output.dir"));
-    for (JobConf jobConf : workflow.getJobs().values()) {
-      Path input = new Path(jobConf.getInputDir());
-      Path output = new Path(jobConf.getOutputDir());
-
-      // Don't create the directory if it is the workflow input or output.
-      if (!workflowInput.equals(input)) {
-        FileSystem.mkdirs(fileSystem, input, mapredSysPerms);
-        LOG.info("Created " + input.toString() + " for " + jobConf.getJobName()
-            + " (input)");
-      }
-      if (!workflowOutput.equals(output)) {
-        FileSystem.mkdirs(fileSystem, output, mapredSysPerms);
-        LOG.info("Created " + output.toString() + " for "
-            + jobConf.getJobName() + " (output)");
-      }
-    }
 
     // TODO: move jar files to dfs
     // TODO: should I also be moving over the individual job configurations?

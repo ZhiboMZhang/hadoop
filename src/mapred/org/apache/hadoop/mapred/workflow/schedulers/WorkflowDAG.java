@@ -138,27 +138,27 @@ public class WorkflowDAG implements Writable {
 
     // Add a fake exit node connecting to all real exit nodes.
     // This allows computation of only one path, rather than multiple paths.
-    WorkflowNode fakeExitNode = new WorkflowNode("fakeNode", 0, true);
+    WorkflowNode fakeExitNode = new WorkflowNode("fakeNode", 0, 0);
     this.addNode(fakeExitNode);
-    // LOG.info("Added fake exit node.");
+    LOG.info("Added fake exit node.");
 
     for (WorkflowNode exit : exitNodes) {
       this.addPredecessor(fakeExitNode, exit);
-      // LOG.info("Added " + exit.getName() +
-      // " as predecessor of fake exit node.");
+      LOG.info("Added " + exit.getJobName()
+          + " as predecessor of fake exit node.");
     }
 
     WorkflowNode criticalNode = fakeExitNode;
     do {
-      // LOG.info("Creating critical path, added " + criticalNode.getName());
+      LOG.info("Creating critical path, added " + criticalNode.getJobName());
       criticalNode = getNextCriticalNode(distances, criticalNode);
       criticalPath.add(0, criticalNode);
     } while (criticalNode != null);
 
     // Null check is after adding, so remove the null element.
     criticalPath.remove(0);
-    this.removeNode(fakeExitNode);
-    // LOG.info("Removed fake exit node.");
+    removeNode(fakeExitNode);
+    LOG.info("Removed fake exit node.");
 
     return criticalPath;
   }
@@ -170,8 +170,8 @@ public class WorkflowDAG implements Writable {
     WorkflowNode criticalNode = null;
 
     for (WorkflowNode predecessor : getPredecessors(current)) {
-      // LOG.info("Checking distance of predecessor " + predecessor.getName()
-      // + " of node " + current.getName());
+      LOG.info("Checking distance of predecessor " + predecessor.getJobName()
+          + " of node " + current.getJobName());
       float distance = distances.get(predecessor);
       if (distance > maxDistance) {
         maxDistance = distance;
@@ -204,8 +204,8 @@ public class WorkflowDAG implements Writable {
     for (WorkflowNode entry : getEntryNodes()) {
       float maxTime = getNodeMaxTime(table, entry);
       distances.put(entry, maxTime);
-      // LOG.info("Updated entry node '" + entry.getName() + "' weight to "
-      // + maxTime);
+      LOG.info("Updated entry node '" + entry.getJobName() + "' weight to "
+          + maxTime);
     }
     LOG.info("Initialized node weights.");
 
@@ -217,7 +217,7 @@ public class WorkflowDAG implements Writable {
 
         if (distances.get(next) < otherPath) {
           distances.put(next, otherPath);
-          LOG.info("Updated " + next.getName() + " weight to " + otherPath);
+          LOG.info("Updated " + next.getJobName() + " weight to " + otherPath);
         }
       }
     }
@@ -225,20 +225,28 @@ public class WorkflowDAG implements Writable {
     return distances;
   }
 
-  // Get the execution time of a node/stage; the slowest contained task.
+  // Get the execution time of a node.
+  // This is the sum of the slowest contained map + reduce tasks.
   private float getNodeMaxTime(Map<TableKey, TableEntry> table,
       WorkflowNode node) {
-    float maxWeight = 0;
-    for (int i = 0; i < node.getNumTasks(); i++) {
-      String type = node.getMachineType(i);
-      TableKey key = new TableKey(node.getJob(), type, node.isMapStage());
+
+    float maxMapWeight = 0f;
+    float maxRedWeight = 0f;
+
+    for (WorkflowTask task : node.getTasks()) {
+
+      String type = task.getMachineType();
+      TableKey key = new TableKey(node.getJobName(), type, task.isMapTask());
       float weight = table.get(key).execTime;
 
-      if (weight > maxWeight) {
-        maxWeight = weight;
+      if (task.isMapTask() && weight > maxMapWeight) {
+        maxMapWeight = weight;
+      } else if (!task.isMapTask() && weight > maxRedWeight) {
+        maxRedWeight = weight;
       }
     }
-    return maxWeight;
+
+    return (maxMapWeight + maxRedWeight);
   }
 
   /**
@@ -264,9 +272,10 @@ public class WorkflowDAG implements Writable {
     // Add up the cost of all the nodes/tasks in the dag.
     float cost = 0f;
     for (WorkflowNode node : getNodes()) {
-      for (int task = 0; task < node.getNumTasks(); task++) {
-        String type = node.getMachineType(task);
-        TableKey key = new TableKey(node.getJob(), type, node.isMapStage());
+      for (WorkflowTask task : node.getTasks()) {
+        String type = task.getMachineType();
+        TableKey key = new TableKey(node.getJobName(), type, task.isMapTask());
+        // TODO: null pointer exception if no entry in time-price table
         cost += table.get(key).cost;
       }
     }
@@ -278,8 +287,7 @@ public class WorkflowDAG implements Writable {
    * 
    * @return A list of {@link WorkflowNode}.
    */
-  // TODO: this is wrong? -> may have to include ALL tasks, not just stages?
-  public List<WorkflowNode> getTopologicalOrdering() {
+  private List<WorkflowNode> getTopologicalOrdering() {
 
     Set<WorkflowNode> nodes = getEntryNodes();
     Set<WorkflowNode> marked = new HashSet<WorkflowNode>();
@@ -322,10 +330,9 @@ public class WorkflowDAG implements Writable {
     WorkflowDAG dag = new WorkflowDAG();
 
     // A temporary mapping to help with DAG creation.
-    Map<JobConf, WorkflowNodePair> infoToMRStages =
-        new HashMap<JobConf, WorkflowNodePair>();
+    Map<JobConf, WorkflowNode> confToNode = new HashMap<JobConf, WorkflowNode>();
 
-    // Create a WorkflowNode for each JobInfo (map & reduce).
+    // Create a WorkflowNode for each JobConf.
     Map<String, JobConf> workflowJobs = workflow.getJobs();
     for (String jobName : workflowJobs.keySet()) {
 
@@ -333,17 +340,11 @@ public class WorkflowDAG implements Writable {
       int maps = workflowJob.getNumMapTasks();
       int reduces = workflowJob.getNumReduceTasks();
 
-      WorkflowNode mapStage = new WorkflowNode(jobName, maps, true);
-      WorkflowNode redStage = new WorkflowNode(jobName, reduces, false);
+      WorkflowNode node = new WorkflowNode(jobName, maps, reduces);
 
-      dag.addNode(mapStage);
-      dag.addNode(redStage);
-      infoToMRStages.put(workflowJob, new WorkflowNodePair(mapStage, redStage));
-      // LOG.info("Added nodes for job " + jobName);
-
-      // Also set up a link between the map & reduce stages of a single job.
-      dag.addSuccessor(mapStage, redStage);
-      dag.addPredecessor(redStage, mapStage);
+      dag.addNode(node);
+      confToNode.put(workflowJob, node);
+      LOG.info("Added node for job " + jobName);
     }
 
     // Copy over dependencies, add successors & find entry/exit jobs.
@@ -353,67 +354,68 @@ public class WorkflowDAG implements Writable {
 
       for (String dependency : dependencies) {
 
-        WorkflowNode node = infoToMRStages.get(workflowJobs.get(successor)).map;
-        WorkflowNode pre = infoToMRStages.get(workflowJobs.get(dependency)).red;
-        dag.addPredecessor(node, pre);
-        dag.addSuccessor(pre, node);
-        // LOG.info("Added link from " + pre.getName() + " to " +
-        // node.getName());
+        WorkflowNode node = confToNode.get(workflowJobs.get(successor));
+        WorkflowNode dep = confToNode.get(workflowJobs.get(dependency));
+
+        dag.addPredecessor(node, dep);
+        dag.addSuccessor(dep, node);
+        LOG.info("Added link from " + dep.getJobName() + " to " + node.getJobName());
       }
     }
 
     return dag;
   }
 
-  private static class WorkflowNodePair {
-
-    WorkflowNode map;
-    WorkflowNode red;
-
-    public WorkflowNodePair(WorkflowNode map, WorkflowNode red) {
-      this.map = map;
-      this.red = red;
-    }
-  }
-
   @Override
   public void readFields(DataInput in) throws IOException {
     // Only need to read nodes, predecessors, & successors.
     // We'll use the same functions as during ordinary graph construction.
+    HashMap<String, WorkflowNode> nodeMap = new HashMap<String, WorkflowNode>();
+
     int numNodes = in.readInt();
     for (int i = 0; i < numNodes; i++) {
       WorkflowNode node = new WorkflowNode();
       node.readFields(in);
       this.addNode(node);
+
+      nodeMap.put(node.getJobName(), node);
     }
 
     // Predecessors.
     int numPredKeys = in.readInt();  // Size of the map.
     for (int i = 0; i < numPredKeys; i++) {
 
-      WorkflowNode key = new WorkflowNode();
-      key.readFields(in);  // Map key.
+      WorkflowNode keyNode = new WorkflowNode();
+      keyNode.readFields(in);  // Map key.
 
       int numValues = in.readInt();  // Size of Map values (set).
       for (int j = 0; j < numValues; j++) {
-        WorkflowNode value = new WorkflowNode();
-        value.readFields(in);  // Map value.
-        this.addPredecessor(key, value);
+        WorkflowNode valueNode = new WorkflowNode();
+        valueNode.readFields(in);  // Map value.
+
+        // Add the predecessor (use the nodes already present in the nodes set).
+        WorkflowNode key = nodeMap.get(keyNode.getJobName());
+        WorkflowNode value = nodeMap.get(valueNode.getJobName());
+        predecessors.get(key).add(value);
       }
     }
 
     // Successors.
-    int numSuccKeys = in.readInt();
+    int numSuccKeys = in.readInt();  // Size of the map.
     for (int i = 0; i < numSuccKeys; i++) {
 
-      WorkflowNode key = new WorkflowNode();
-      key.readFields(in);
+      WorkflowNode keyNode = new WorkflowNode();
+      keyNode.readFields(in);  // Map key.
 
-      int numValues = in.readInt();
+      int numValues = in.readInt();  // Size of Map values (set).
       for (int j = 0; j < numValues; j++) {
-        WorkflowNode value = new WorkflowNode();
-        value.readFields(in);
-        this.addSuccessor(key, value);
+        WorkflowNode valueNode = new WorkflowNode();
+        valueNode.readFields(in); // Map value.
+
+        // Add the successor.
+        WorkflowNode key = nodeMap.get(keyNode.getJobName());
+        WorkflowNode value = nodeMap.get(valueNode.getJobName());
+        successors.get(key).add(value);
       }
     }
 

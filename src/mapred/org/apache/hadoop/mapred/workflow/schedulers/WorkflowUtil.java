@@ -16,9 +16,6 @@
  */
 package org.apache.hadoop.mapred.workflow.schedulers;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -27,42 +24,12 @@ import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.io.Text;
-import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.MachineType;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 
 public class WorkflowUtil {
-
-  @Deprecated
-  public static class MachineTypeJobNamePair implements Writable {
-    String machineType;
-    String jobName;
-
-    /**
-     * Only to be used when calling readFields afterwards.
-     */
-    public MachineTypeJobNamePair() {}
-
-    public MachineTypeJobNamePair(String machineType, String jobName) {
-      this.machineType = machineType;
-      this.jobName = jobName;
-    }
-
-    @Override
-    public void write(DataOutput out) throws IOException {
-      Text.writeString(out, jobName);
-      Text.writeString(out, machineType);
-    }
-
-    @Override
-    public void readFields(DataInput in) throws IOException {
-      jobName = Text.readString(in);
-      machineType = Text.readString(in);
-    }
-  }
 
   /**
    * Compare {@link MachineType} objects by their charge rate in ascending

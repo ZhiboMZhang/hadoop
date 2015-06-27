@@ -358,7 +358,14 @@ public class JobStatus implements Writable, Cloneable {
   // Writable
   ///////////////////////////////////////
   public synchronized void write(DataOutput out) throws IOException {
-    workflowId.write(out);
+
+    if (workflowId == null) {
+      out.writeBoolean(false);
+    } else {
+      out.writeBoolean(true);
+      workflowId.write(out);
+    }
+
     jobid.write(out);
     out.writeFloat(setupProgress);
     out.writeFloat(mapProgress);
@@ -380,8 +387,12 @@ public class JobStatus implements Writable, Cloneable {
   }
 
   public synchronized void readFields(DataInput in) throws IOException {
-    this.workflowId = new WorkflowID();
-    this.workflowId.readFields(in);
+
+    if (in.readBoolean()) {
+      this.workflowId = new WorkflowID();
+      this.workflowId.readFields(in);
+    }
+
     this.jobid = new JobID();
     this.jobid.readFields(in);
     this.setupProgress = in.readFloat();

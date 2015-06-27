@@ -767,9 +767,7 @@ public class JobClient extends Configured implements MRConstants, Tool  {
     // Create a number of filenames in the JobTracker's fs namespace
     FileSystem fs = submitJobDir.getFileSystem(job);
     LOG.debug("default FileSystem: " + fs.getUri());
-    // The directory is already created for workflow jobs (contains input/).
-    // TODO: fix dirty workaround.
-    if (fs.exists(submitJobDir) && job.getWorkflowId() == null) {
+    if (fs.exists(submitJobDir)) {
       throw new IOException("Not submitting job. Job directory " + submitJobDir
           +" already exists!! This is unexpected.Please check what's there in" +
           " that directory");
