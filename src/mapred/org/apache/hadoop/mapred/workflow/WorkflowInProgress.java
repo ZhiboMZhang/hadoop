@@ -46,20 +46,31 @@ public class WorkflowInProgress {
     this.workflowConf = workflowConf;
     workflowId = workflowInfo.getWorkflowId();
     profile = new WorkflowProfile(workflowId, workflowConf.getWorkflowName());
-    status = new WorkflowStatus(workflowId);
-    status.setSubmissionTime(jobTracker.getClock().getTime());
-  }
-
-  public WorkflowStatus getStatus() {
-    return status;
+    status = new WorkflowStatus(workflowId, jobTracker.getClock());
   }
 
   public WorkflowProfile getProfile() {
     return profile;
   }
 
+  public WorkflowStatus getStatus() {
+    return status;
+  }
+
+  public WorkflowID getWorkflowId() {
+    return workflowId;
+  }
+
   public WorkflowConf getConf() {
     return workflowConf;
+  }
+
+  public long getStartTime() {
+    return status.getStartTime();
+  }
+
+  public long getFinishTime() {
+    return status.getFinishTime();
   }
 
 }

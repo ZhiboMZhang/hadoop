@@ -103,7 +103,6 @@ public class WorkflowClient extends Configured {
     @Override
     public boolean isComplete() throws IOException {
       updateStatus();
-      // TODO: is this correct? (does it have to be non-blocking?)
       return status.isFinished();
     }
 
@@ -115,13 +114,11 @@ public class WorkflowClient extends Configured {
 
     @Override
     public WorkflowID getID() {
-      // TODO: function not called yet in the code.
       return profile.getWorkflowId();
     }
 
     @Override
     public String getWorkflowName() {
-      // TODO: function not called yet in the code.
       return profile.getWorkflowName();
     }
 
@@ -135,7 +132,6 @@ public class WorkflowClient extends Configured {
 
     @Override
     public WorkflowStatus getWorkflowStatus() throws IOException {
-      // TODO: function not called yet in the code.
       updateStatus();
       return status;
     }
@@ -308,6 +304,8 @@ public class WorkflowClient extends Configured {
           ClassNotFoundException, InterruptedException, IOException {
 
         WorkflowConf workflowCopy = workflow;
+        WorkflowStatus status = null;
+        FileSystem submitFs = null;
 
         // Set up the workflow staging area.
         Path stagingArea = WorkflowSubmissionFiles.getStagingDir(
@@ -320,69 +318,79 @@ public class WorkflowClient extends Configured {
         LOG.info("WorkflowID: " + workflowId.toString());
         LOG.info("Path submitWorkflowDir: " + submitWorkflowDir.toString());
 
-        // Get cluster status information from the JobTracker.
-        ClusterStatus clusterStatus;
-        clusterStatus = workflowSubmitClient.getClusterStatus(true);
-        Map<String, ResourceStatus> machines = clusterStatus.getTrackerInfo();
+        try {
 
-        LOG.info("Got ClusterStatus, tracker information.");
+          // Get cluster status information from the JobTracker.
+          ClusterStatus clusterStatus;
+          clusterStatus = workflowSubmitClient.getClusterStatus(true);
+          Map<String, ResourceStatus> machines = clusterStatus.getTrackerInfo();
 
-        // Read in the machine type information.
-        // TODO: Should this file location/name be set in configuration?
-        Path workflowJar = new Path(workflowCopy.getJar());
-        String machineXml = workflowJar.getParent().toString()
-            + Path.SEPARATOR + "machineTypes.xml";
-        Set<MachineType> machineTypes = MachineType.parse(machineXml);
+          LOG.info("Got ClusterStatus, tracker information.");
 
-        LOG.info("Loaded machine types.");
+          // Read in the machine type information.
+          // TODO: Should this file location/name be set in configuration?
+          Path workflowJar = new Path(workflowCopy.getJar());
+          String machineXml = workflowJar.getParent().toString()
+              + Path.SEPARATOR + "machineTypes.xml";
+          Set<MachineType> machineTypes = MachineType.parse(machineXml);
 
-        // Read in Job/Machine -> Time/Price information, & construct the table.
-        String timeXml = workflowJar.getParent().toString()
-            + Path.SEPARATOR + "workflowTaskTimes.xml";
-        Map<TableKey, TableEntry> table = TimePriceTable.parse(timeXml);
-        TimePriceTable.update(table, machineTypes);
+          LOG.info("Loaded machine types.");
 
-        LOG.info("Loaded time-price table.");
+          // Read in Job/Machine -> Time/Price info, & construct the table.
+          String timeXml = workflowJar.getParent().toString() + Path.SEPARATOR
+              + "workflowTaskTimes.xml";
+          Map<TableKey, TableEntry> table = TimePriceTable.parse(timeXml);
+          TimePriceTable.update(table, machineTypes);
 
-        // Initialize/compute job information.
-        updateJobInfo(workflowCopy, workflowId);
-        updateJobIoPaths(workflowCopy);
+          LOG.info("Loaded time-price table.");
 
-        // Check output.
-        checkOutputSpecification(workflowCopy);
+          // Initialize/compute job information.
+          updateJobInfo(workflowCopy, workflowId);
+          updateJobIoPaths(workflowCopy);
 
-        // Generate the scheduling plan. Needs to provide:
-        // - ordering of tasks to be executed
-        // - pairing, each task to a machine type
-        SchedulingPlan plan = workflowCopy.getSchedulingPlan();
-        if (!plan.generatePlan(machineTypes, machines, table, workflowCopy)) {
-          throw new IOException("Workflow constraints are infeasible. Exiting.");
+          // Check output.
+          checkOutputSpecification(workflowCopy);
+
+          // Generate the scheduling plan. Needs to provide:
+          // - ordering of tasks to be executed
+          // - pairing, each task to a machine type
+          SchedulingPlan plan = workflowCopy.getSchedulingPlan();
+          if (!plan.generatePlan(machineTypes, machines, table, workflowCopy)) {
+            throw new IOException("Workflow constraints are infeasible. Exiting.");
+          }
+
+          workflowSubmitClient.setWorkflowSchedulingPlan(plan);
+
+          // Write configuration into HDFS so that JobTracker can read it.
+          copyAndConfigureFiles(workflowCopy, submitWorkflowDir, submitFs);
+
+          // Submit the workflow.
+          status = workflowSubmitClient.submitWorkflow(workflowId,
+              submitWorkflowDir.toString());
+
+          LOG.info("In WorkflowClient. Got WorkflowStatus back from JobTracker.");
+
+          WorkflowProfile profile =
+              workflowSubmitClient.getWorkflowProfile(workflowId);
+
+          LOG.info("In WorkflowClient. Got WorkflowProfile back from JobTracker.");
+
+          if (status != null && profile != null) {
+            LOG.info("Done submitWorkflowInternal, returning.");
+            return new NetworkedWorkflow(status, profile, workflowSubmitClient);
+          } else {
+            throw new IOException("Could not launch workflow.");
+          }
+
+        } finally {
+          if (status == null) {
+            LOG.info("Cleaning up workflow staging area " + submitWorkflowDir);
+            if (submitFs != null && submitWorkflowDir != null) {
+              submitFs.delete(submitWorkflowDir, true);
+            }
+          }
         }
 
-        workflowSubmitClient.setWorkflowSchedulingPlan(plan);
-
-        // Write configuration into HDFS so that JobTracker can read it.
-        copyAndConfigureFiles(workflowCopy, submitWorkflowDir);
-
-        // Submit the workflow.
-        WorkflowStatus status = workflowSubmitClient.submitWorkflow(workflowId,
-            submitWorkflowDir.toString());
-
-        LOG.info("In WorkflowClient. Got WorkflowStatus back from JobTracker.");
-
-        WorkflowProfile profile =
-            workflowSubmitClient.getWorkflowProfile(workflowId);
-
-        LOG.info("In WorkflowClient. Got WorkflowProfile back from JobTracker.");
-
-        if (status != null && profile != null) {
-          LOG.info("Done submitWorkflowInternal, returning.");
-          return new NetworkedWorkflow(status, profile, workflowSubmitClient);
-        } else {
-          throw new IOException("Could not launch workflow.");
-        }
-
-        // TODO: Clean up.
       }
     });
   }
@@ -558,13 +566,14 @@ public class WorkflowClient extends Configured {
    * @throws InterruptedException
    */
   private void copyAndConfigureFiles(final WorkflowConf workflow,
-      Path submitWorkflowDir) throws IOException, InterruptedException {
+      Path submitWorkflowDir, FileSystem fileSystem) throws IOException,
+      InterruptedException {
 
     LOG.info("In WorkflowClient copyAndConfigureFiles function.");
 
     short replication = (short) workflow.getInt("mapred.submit.replcation", 1);
 
-    FileSystem fileSystem = submitWorkflowDir.getFileSystem(workflow);
+    fileSystem = submitWorkflowDir.getFileSystem(workflow);
     if (fileSystem.exists(submitWorkflowDir)) {
       throw new IOException("Not submitting workflow. Workflow directory "
           + submitWorkflowDir + " already exists!! This is unexpected."
@@ -642,8 +651,6 @@ public class WorkflowClient extends Configured {
    * @throws IOException if communication to the {@link JobTracker} fails.
    * @throws InterruptedException
    */
-  // TODO:
-  // TODO: returns unsuccessful even when execution is a success.
   private boolean monitorAndPrintWorkflow(WorkflowConf conf,
       RunningWorkflow workflow) throws IOException, InterruptedException {
 
@@ -667,7 +674,8 @@ public class WorkflowClient extends Configured {
       String finished = Arrays.toString(finishedJobs.toArray());
 
       // Get the progress of each running job.
-      // TODO
+      // TODO: They are currently submitted in separate threads,
+      // TODO: this is future work.
       String report = "\nPrepared: " + prepared + "\nSubmitted: " + submitted
           + "\nRunning: " + running + "\nFinished: " + finished;
 

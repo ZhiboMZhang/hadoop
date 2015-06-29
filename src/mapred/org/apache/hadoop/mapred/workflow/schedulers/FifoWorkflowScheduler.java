@@ -51,14 +51,14 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
 
   private static final Log LOG = LogFactory.getLog(FifoWorkflowScheduler.class);
 
-  private FifoWorkflowListener fifoWorkflowListener;
+  private WorkflowListener fifoWorkflowListener;
   private EagerTaskInitializationListener eagerTaskInitializationListener;
 
   private WorkflowSchedulingProtocol workflowSchedulingProtocol;
   private SchedulingPlan schedulingPlan;
 
   public FifoWorkflowScheduler() {
-    fifoWorkflowListener = new FifoWorkflowListener();
+    fifoWorkflowListener = new WorkflowListener();
   }
 
   @Override

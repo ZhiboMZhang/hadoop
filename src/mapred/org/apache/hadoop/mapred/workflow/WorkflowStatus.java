@@ -26,6 +26,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapred.Clock;
 
 /**
  * Describes the current status of a workflow.
@@ -42,7 +43,10 @@ public class WorkflowStatus implements Writable {
   private WorkflowID workflowId;
   private RunState runState = RunState.PREP;
   private String failureInfo = "NA";
-  private long submissionTime = -1L;
+
+  private Clock clock;
+  private long startTime = -1L;
+  private long finishTime = -1L;
 
   private Collection<String> prepJobs;
   private Collection<String> submittedJobs;
@@ -55,19 +59,21 @@ public class WorkflowStatus implements Writable {
     submittedJobs = new HashSet<String>();
     runningJobs = new HashSet<String>();
     finishedJobs = new HashSet<String>();
+    clock = new Clock();
   }
 
-  public WorkflowStatus(WorkflowID workflowId) {
+  public WorkflowStatus(WorkflowID workflowId, Clock clock) {
     this();
     this.workflowId = workflowId;
+    this.clock = clock;
+    this.startTime = clock.getTime();
   }
 
   // TODO: failed jobs set..
   // TODO: job submitted for a workflow which actually doesn't contain it..
   // TODO: for all of them.. what if job is in the wrong state?
-  // TODO: --> pass in workflowConf on construction, use it to block adding of
+  // TODO: pass in workflowConf on construction, use it to block adding of
   // jobs which aren't in the workflow configuration?
-  // TODO: any need to be synchronized, and with what lock?
 
   /**
    * Add a job to the list of jobs which have not yet been submitted.
@@ -126,7 +132,7 @@ public class WorkflowStatus implements Writable {
 
     if (isFinished()) {
       runState = RunState.SUCCEEDED;
-      LOG.info("Updating workflow status to finished/succeeded.");
+      finishTime = clock.getTime();
     }
   }
 
@@ -189,20 +195,16 @@ public class WorkflowStatus implements Writable {
    *
    * @return The submission time of the workflow.
    */
-  public synchronized long getSubmissionTime() {
-    return submissionTime;
+  public synchronized long getStartTime() {
+    return startTime;
   }
 
   /**
-   * Set the submission time of the workflow.
-   *
-   * @param submissionTime The submission time to be set.
+   * Return the time when the workflow completed, as measured when the last job
+   * finished.
    */
-  public synchronized void setSubmissionTime(long submissionTime) {
-    if (runState == RunState.PREP) {
-      this.submissionTime = submissionTime;
-      runState = RunState.SUBMITTED;
-    }
+  public synchronized long getFinishTime() {
+    return finishTime;
   }
 
   /**
@@ -237,7 +239,10 @@ public class WorkflowStatus implements Writable {
     workflowId.write(out);
     Text.writeString(out, runState.name());
     Text.writeString(out, failureInfo);
-    out.writeLong(submissionTime);
+
+    clock.write(out);
+    out.writeLong(startTime);
+    out.writeLong(finishTime);
 
     writeJobSet(out, prepJobs);
     writeJobSet(out, submittedJobs);
@@ -259,7 +264,10 @@ public class WorkflowStatus implements Writable {
     workflowId.readFields(in);
     runState = RunState.valueOf(Text.readString(in));
     failureInfo = Text.readString(in);
-    submissionTime = in.readLong();
+
+    clock.readFields(in);
+    startTime = in.readLong();
+    finishTime = in.readLong();
 
     readJobSet(in, prepJobs);
     readJobSet(in, submittedJobs);

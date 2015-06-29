@@ -8,7 +8,7 @@ class WorkflowSchedulingInfo extends SchedulingInfo {
   private WorkflowID id;
 
   public WorkflowSchedulingInfo(WorkflowStatus status) {
-    super(status.getSubmissionTime());
+    super(status.getStartTime());
     id = status.getWorkflowId();
   }
 

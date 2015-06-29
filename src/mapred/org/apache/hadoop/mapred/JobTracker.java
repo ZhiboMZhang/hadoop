@@ -644,16 +644,25 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
           && job.getStatus().getRunState() != JobStatus.PREP
           && (job.getFinishTime() + MIN_TIME_BEFORE_RETIRE < now);
     }
+
+    private boolean minConditionToRetire(WorkflowInProgress workflow, long now) {
+      WorkflowStatus status = workflow.getStatus();
+      return status.getRunState() != WorkflowStatus.RunState.RUNNING
+          && status.getRunState() != WorkflowStatus.RunState.PREP
+          && status.getRunState() != WorkflowStatus.RunState.SUBMITTED
+          && (workflow.getFinishTime() + MIN_TIME_BEFORE_RETIRE < now);
+    }
+
     /**
-     * The run method lives for the life of the JobTracker,
-     * and removes Jobs that are not still running, but which
-     * finished a long time ago.
+     * The run method lives for the life of the JobTracker, and removes Jobs and
+     * Workflows that are not still running, but which finished a long time ago.
      */
     public void run() {
       while (true) {
         try {
           Thread.sleep(RETIRE_JOB_CHECK_INTERVAL);
           List<JobInProgress> retiredJobs = new ArrayList<JobInProgress>();
+          List<WorkflowInProgress> retiredWorkflows = new ArrayList<WorkflowInProgress>();
           long now = clock.getTime();
           long retireBefore = now - RETIRE_JOB_INTERVAL;
 
@@ -725,6 +734,32 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
               }
             }
           }
+
+          synchronized (workflows) {
+            for (WorkflowInProgress workflow : workflows.values()) {
+              if (minConditionToRetire(workflow, now)
+                  && (workflow.getFinishTime() < retireBefore)) {
+                retiredWorkflows.add(workflow);
+              }
+            }
+          }
+          if (!retiredWorkflows.isEmpty()) {
+            synchronized (JobTracker.this) {
+              synchronized (workflows) {
+                synchronized (taskScheduler) {
+                  // Jobs and Workflows are dealt with separately, so we only
+                  // have to worry about anything directly related to workflows.
+                  for (WorkflowInProgress workflow : retiredWorkflows) {
+                    workflows.remove(workflow.getProfile().getWorkflowId());
+                    for (WorkflowInProgressListener l : workflowInProgressListeners) {
+                      l.workflowRemoved(workflow);
+                    }
+                  }
+                }
+              }
+            }
+          }
+
         } catch (InterruptedException t) {
           break;
         } catch (Throwable t) {

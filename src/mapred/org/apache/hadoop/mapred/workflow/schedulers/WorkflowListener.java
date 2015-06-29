@@ -38,10 +38,10 @@ import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgressListener;
 import org.apache.hadoop.mapred.workflow.WorkflowStatus;
 
-public class FifoWorkflowListener extends JobInProgressListener implements
+public class WorkflowListener extends JobInProgressListener implements
     WorkflowInProgressListener {
 
-  private static final Log LOG = LogFactory.getLog(FifoWorkflowListener.class);
+  private static final Log LOG = LogFactory.getLog(WorkflowListener.class);
 
   private Map<JobID, JobInProgress> jobs;
   private Map<WorkflowID, WorkflowInProgress> workflows;
@@ -49,7 +49,7 @@ public class FifoWorkflowListener extends JobInProgressListener implements
   // A queue to hold both jobs and workflows in progress.
   private Map<? super SchedulingInfo, Object> queue;
 
-  public FifoWorkflowListener() {
+  public WorkflowListener() {
     jobs = new HashMap<JobID, JobInProgress>();
     workflows = new HashMap<WorkflowID, WorkflowInProgress>();
     queue = new LinkedHashMap<Object, Object>();
@@ -70,7 +70,7 @@ public class FifoWorkflowListener extends JobInProgressListener implements
     workflows.put(workflowId, workflow);
     queue.put(new WorkflowSchedulingInfo(workflow.getStatus()), workflow);
 
-    LOG.info("Added workflow " + workflowId + " to queue.");
+    LOG.info("Added the workflow " + workflowId + " to queue.");
 
     // Add all workflow jobs to WorkflowStatus in PREP state.
     for (JobConf conf : workflow.getConf().getJobs().values()) {
@@ -80,12 +80,12 @@ public class FifoWorkflowListener extends JobInProgressListener implements
 
   @Override
   public synchronized void workflowRemoved(WorkflowInProgress workflow) {
-    // Workflow will be removed once it completes.
+    // Workflow will be removed once it completes (see jobUpdated).
   }
 
   @Override
   public synchronized void workflowUpdated(WorkflowChangeEvent event) {
-    // TODO: Workflow updating currently not handled.
+    // Workflow updating is handled when jobs are updated.
   }
 
   @Override
@@ -100,7 +100,7 @@ public class FifoWorkflowListener extends JobInProgressListener implements
     // Update the workflow status.
     WorkflowID workflowId = job.getStatus().getWorkflowId();
     if (workflowId != null) {
-      LOG.info("Added job is a workflow job.");
+      LOG.info("The added job is a workflow job.");
       WorkflowInProgress workflow = workflows.get(workflowId);
       workflow.getStatus().addRunningJob(job.getJobConf().getJobName());
     }
@@ -115,7 +115,8 @@ public class FifoWorkflowListener extends JobInProgressListener implements
   // Most code is taken from JobQueueJobInProgressListener.
   public synchronized void jobUpdated(JobChangeEvent event) {
 
-    LOG.info("In jobUpdated function.");
+    LOG.info("A job was updated.");
+
     if (event instanceof JobStatusChangeEvent) {
       JobStatusChangeEvent statusEvent = (JobStatusChangeEvent) event;
 
@@ -124,6 +125,8 @@ public class FifoWorkflowListener extends JobInProgressListener implements
 
         if (JobStatus.SUCCEEDED == runState || JobStatus.FAILED == runState
             || JobStatus.KILLED == runState) {
+
+          LOG.info("The job is finished.");
 
           JobStatus oldStatus = statusEvent.getOldStatus();
           JobSchedulingInfo info = new JobSchedulingInfo(oldStatus);
@@ -137,7 +140,7 @@ public class FifoWorkflowListener extends JobInProgressListener implements
           WorkflowID workflowId = job.getStatus().getWorkflowId();
 
           if (workflowId != null) {
-            LOG.info("jobUpdated: workflowId is: " + workflowId);
+            LOG.info("Updated job is part of a workflow. Its ID is: " + workflowId);
 
             // Update the workflow status.
             WorkflowInProgress workflow = workflows.get(workflowId);
@@ -145,7 +148,7 @@ public class FifoWorkflowListener extends JobInProgressListener implements
 
             String jobName = job.getJobConf().getJobName();
             workflowStatus.addFinishedJob(jobName);
-            LOG.info("updating workflow status, added finished job " + jobName);
+            LOG.info("Updated job is finised, updating workflow status for " + jobName);
 
             // Check the workflow status.
             if (workflow.getStatus().isFinished()) {
