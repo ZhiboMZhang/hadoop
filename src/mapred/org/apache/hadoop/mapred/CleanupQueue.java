@@ -24,7 +24,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -55,7 +54,7 @@ public class CleanupQueue {
   /**
    * Contains info related to the path of the file/dir to be deleted
    */
-  static class PathDeletionContext {
+  public static class PathDeletionContext {
     final Path fullPath;// full path of file or dir
     final Configuration conf;
     final UserGroupInformation ugi;

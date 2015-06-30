@@ -49,6 +49,16 @@ public interface WorkflowSubmissionProtocol extends WorkflowSchedulingProtocol {
       String workflowSubmitDir) throws IOException;
 
   /**
+   * Clean up a workflow which has completed execution.
+   *
+   * Temporary directories on hdfs are removed, including both the workflow
+   * staging and internal job input & output directories.
+   *
+   * @param workflowId The unique ID of the workflow to clean up.
+   */
+  public void cleanupWorkflow(WorkflowID workflowId);
+
+  /**
    * Allocate a name for the workflow.
    *
    * @return A unique workflow name for submitting workflows.

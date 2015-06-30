@@ -3791,6 +3791,11 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
     return workflow.getStatus();
   }
 
+  // TODO: error checking and stuffs.
+  public synchronized void cleanupWorkflow(WorkflowID workflowId) {
+    workflows.get(workflowId).cleanupWorkflow();
+  }
+
   /**
    * Add a {@link WorkflowInProgressListener} to the list of listeners.
    * Schedulers use this function to add themselves to the list, so that they

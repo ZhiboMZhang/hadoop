@@ -103,7 +103,14 @@ public class WorkflowClient extends Configured {
     @Override
     public boolean isComplete() throws IOException {
       updateStatus();
-      return status.isFinished();
+      boolean completed = status.isFinished();
+
+      // After the workflow has completed, clean it up.
+      if (completed) {
+        workflowSubmitClient.cleanupWorkflow(profile.getWorkflowId());
+      }
+
+      return completed;
     }
 
     @Override
@@ -368,12 +375,8 @@ public class WorkflowClient extends Configured {
           status = workflowSubmitClient.submitWorkflow(workflowId,
               submitWorkflowDir.toString());
 
-          LOG.info("In WorkflowClient. Got WorkflowStatus back from JobTracker.");
-
           WorkflowProfile profile =
               workflowSubmitClient.getWorkflowProfile(workflowId);
-
-          LOG.info("In WorkflowClient. Got WorkflowProfile back from JobTracker.");
 
           if (status != null && profile != null) {
             LOG.info("Done submitWorkflowInternal, returning.");

@@ -16,6 +16,15 @@
  */
 package org.apache.hadoop.mapred.workflow;
 
+import java.util.HashSet;
+import java.util.Set;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.CleanupQueue;
+import org.apache.hadoop.mapred.CleanupQueue.PathDeletionContext;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.JobTracker;
 
 /**
@@ -24,6 +33,8 @@ import org.apache.hadoop.mapred.JobTracker;
  * other data for bookkeeping of its Jobs.
  */
 public class WorkflowInProgress {
+
+  private static final Log LOG = LogFactory.getLog(WorkflowInProgress.class);
 
   /**
    * Used when the kill signal is issued to a workflow which is initializing.
@@ -47,6 +58,46 @@ public class WorkflowInProgress {
     workflowId = workflowInfo.getWorkflowId();
     profile = new WorkflowProfile(workflowId, workflowConf.getWorkflowName());
     status = new WorkflowStatus(workflowId, jobTracker.getClock());
+  }
+
+  /**
+   * Clean up a completed workflow.
+   *
+   * This function removes all temporary directories associated with the
+   * workflow.
+   */
+  // Called from jobTracker, which is called from running/networked workflow.
+  public void cleanupWorkflow() {
+    synchronized (this) {
+
+      CleanupQueue queue = CleanupQueue.getInstance();
+
+      String workflowInput = workflowConf.get("mapred.input.dir");
+      String workflowOutput = workflowConf.get("mapred.output.dir");
+
+      // Remove the temporary directories created in HDFS.
+      // These are the input/output directories of jobs internal to the workflow.
+      // Some may be repeated, so add all paths to a set before deletion.
+      Set<String> ioDirs = new HashSet<String>();
+      for (JobConf conf : workflowConf.getJobs().values()) {
+        String input = conf.getInputDir();
+        String output = conf.getOutputDir();
+        if (!output.equals(workflowOutput)) { ioDirs.add(output); }
+        if (!input.equals(workflowInput)) { ioDirs.add(input); }
+      }
+      for (String dir : ioDirs) {
+        queue.addToQueue(new PathDeletionContext(new Path(dir), workflowConf));
+        LOG.info("Removing temporary directory '" + dir + "'.");
+      }
+
+      // Remove the workflow submission directory.
+      String submitJobDir = workflowConf.get("mapreduce.workflow.dir");
+      if (submitJobDir != null) {
+        LOG.info("Removing workflow submit directory '" + submitJobDir + "'.");
+        queue.addToQueue(
+          new PathDeletionContext(new Path(submitJobDir), workflowConf));
+      }
+    }
   }
 
   public WorkflowProfile getProfile() {
