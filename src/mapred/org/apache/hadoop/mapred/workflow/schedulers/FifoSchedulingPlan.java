@@ -64,7 +64,7 @@ public class FifoSchedulingPlan extends SchedulingPlan {
   @Override
   public boolean generatePlan(Set<MachineType> machineTypes,
       Map<String, ResourceStatus> machines, Map<TableKey, TableEntry> table,
-      WorkflowConf workflow) {
+      WorkflowConf workflow) throws IOException {
 
     LOG.info("In FairScheduler.class generatePlan() function");
     WorkflowUtil.printMachineTypesInfo(machineTypes);

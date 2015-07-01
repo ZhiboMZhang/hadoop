@@ -42,10 +42,12 @@ public abstract class SchedulingPlan implements Writable {
    * 
    * @return True if the workflow can be run with the given resources, false
    *         otherwise.
+   * @throws IOException Thrown if the time-price table does not contain a
+   *           required mapping.
    */
   public abstract boolean generatePlan(Set<MachineType> machineTypes,
       Map<String, ResourceStatus> machines, Map<TableKey, TableEntry> table,
-      WorkflowConf workflow);
+      WorkflowConf workflow) throws IOException;
 
   /**
    * Get the mapping from actual available machines to machine types.

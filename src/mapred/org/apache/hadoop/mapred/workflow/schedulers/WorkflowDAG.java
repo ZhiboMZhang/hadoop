@@ -268,15 +268,22 @@ public class WorkflowDAG implements Writable {
   /**
    * Compute and return the total cost of a WorkflowDAG.
    */
-  public float getCost(Map<TableKey, TableEntry> table) {
+  public float getCost(Map<TableKey, TableEntry> table) throws IOException {
     // Add up the cost of all the nodes/tasks in the dag.
     float cost = 0f;
     for (WorkflowNode node : getNodes()) {
       for (WorkflowTask task : node.getTasks()) {
         String type = task.getMachineType();
         TableKey key = new TableKey(node.getJobName(), type, task.isMapTask());
-        // TODO: null pointer exception if no entry in time-price table
-        cost += table.get(key).cost;
+        TableEntry entry = table.get(key);
+        if (entry != null) {
+          cost += entry.cost;
+        } else {
+          // IOException because info wasn't read from the configuration file.
+          throw new IOException("Entry for " + node.getJobName() + " ("
+              + (task.isMapTask() ? "map" : "reduce") + ") / " + type
+              + " does not exist in time price table.");
+        }
       }
     }
     return cost;

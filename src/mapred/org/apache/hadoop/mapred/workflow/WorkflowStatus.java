@@ -69,9 +69,6 @@ public class WorkflowStatus implements Writable {
     this.startTime = clock.getTime();
   }
 
-  // TODO: failed jobs set..
-  // TODO: job submitted for a workflow which actually doesn't contain it..
-  // TODO: for all of them.. what if job is in the wrong state?
   // TODO: pass in workflowConf on construction, use it to block adding of
   // jobs which aren't in the workflow configuration?
 
@@ -213,7 +210,7 @@ public class WorkflowStatus implements Writable {
    * @return A string containing diagnostic information on job failure.
    */
   public synchronized String getFailureInfo() {
-    // TODO: ? call to get failure info of current job.
+    // TODO: Add a call to get failure info of current jobs.
     return failureInfo;
   }
 

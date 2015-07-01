@@ -120,7 +120,8 @@ public class WorkflowConf extends Configuration implements Writable {
    */
   // @formatter:on
   public boolean generatePlan(Set<MachineType> machineTypes,
-      Map<String, ResourceStatus> machines, Map<TableKey, TableEntry> table) {
+      Map<String, ResourceStatus> machines, Map<TableKey, TableEntry> table)
+      throws IOException {
     return schedulingPlan.generatePlan(machineTypes, machines, table, this);
   }
 

@@ -58,7 +58,6 @@ public class WorkflowUtil {
    *
    * @return A map of machine names to a machine type names.
    */
-  // TODO: test
   public static Map<String, String> matchResourceTypes(
       Set<MachineType> machineTypes, Map<String, ResourceStatus> machines) {
 
@@ -82,7 +81,6 @@ public class WorkflowUtil {
 
     return resourcePairings;
   }
-
 
   // Get some measure of distance between a MachineType and a ResourceStatus.
   // A lower distance means that the two are more similar.
