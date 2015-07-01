@@ -40,13 +40,10 @@ import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
 import org.apache.hadoop.mapreduce.TaskType;
 
-/**
- * A basic workflow scheduling plan, schedules jobs & their tasks in a first-in
- * first-out manner.
- */
-public class FifoSchedulingPlan extends SchedulingPlan {
 
-  private static final Log LOG = LogFactory.getLog(FifoSchedulingPlan.class);
+public class GreedySchedulingPlan extends SchedulingPlan {
+
+  private static final Log LOG = LogFactory.getLog(GreedySchedulingPlan.class);
 
   private WorkflowDAG workflowDag;
 

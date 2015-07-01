@@ -48,10 +48,10 @@ import org.apache.hadoop.mapreduce.server.jobtracker.TaskTracker;
 import org.apache.hadoop.util.RunJar;
 
 
-public class FifoWorkflowScheduler extends TaskScheduler implements
+public class GreedyWorkflowScheduler extends TaskScheduler implements
     WorkflowScheduler {
 
-  private static final Log LOG = LogFactory.getLog(FifoWorkflowScheduler.class);
+  private static final Log LOG = LogFactory.getLog(GreedyWorkflowScheduler.class);
 
   private WorkflowListener fifoWorkflowListener;
   private EagerTaskInitializationListener eagerTaskInitializationListener;
@@ -59,7 +59,7 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
   private WorkflowSchedulingProtocol workflowSchedulingProtocol;
   private SchedulingPlan schedulingPlan;
 
-  public FifoWorkflowScheduler() {
+  public GreedyWorkflowScheduler() {
     fifoWorkflowListener = new WorkflowListener();
   }
 
