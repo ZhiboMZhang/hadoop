@@ -26,6 +26,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.security.UserGroupInformation;
 
 /**
@@ -38,8 +39,10 @@ public class WorkflowSubmissionFiles {
   private final static Log LOG = LogFactory.getLog(WorkflowSubmissionFiles.class);
 
   private final static String WORKFLOW_CONF_REPLICATED_NAME = "workflow.conf";
-  public final static FsPermission WORKFLOW_DIR_PERMISSION = FsPermission
-      .createImmutable((short) 0700);
+  public final static FsPermission WORKFLOW_DIR_PERMISSION =
+      FsPermission.createImmutable((short) 0700);
+  public final static FsPermission WORKFLOW_JAR_PERMISSION =
+      FsPermission.createImmutable((short) 0755);
 
   /**
    * Initializes the staging directory and returns the path. It also keeps track
@@ -88,8 +91,17 @@ public class WorkflowSubmissionFiles {
   /**
    * Get the workflow jar path.
    */
-  public static Path getWorkflowJar(Path workflowSubmitDir) {
-    return new Path(workflowSubmitDir, "workflow.jar");
+  public static Path getWorkflowJar(Path workflowSubmitDir, WorkflowConf conf) {
+    String workflowName = conf.getWorkflowName() + ".jar";
+    return new Path(workflowSubmitDir, workflowName);
+  }
+
+  /**
+   * Get the path of a workflow job's jar file.
+   */
+  public static Path getJobJar(Path workflowSubmitDir, JobConf conf) {
+    String jobName = conf.getJobName() + ".jar";
+    return new Path(workflowSubmitDir, jobName);
   }
 
   /**

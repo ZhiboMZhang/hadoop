@@ -16,9 +16,6 @@
  */
 package org.apache.hadoop.mapred.workflow.schedulers;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -33,6 +30,9 @@ import java.util.jar.Manifest;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.ClusterStatus;
 import org.apache.hadoop.mapred.EagerTaskInitializationListener;
 import org.apache.hadoop.mapred.JobConf;
@@ -42,9 +42,11 @@ import org.apache.hadoop.mapred.Task;
 import org.apache.hadoop.mapred.TaskScheduler;
 import org.apache.hadoop.mapred.TaskTrackerStatus;
 import org.apache.hadoop.mapred.workflow.SchedulingPlan;
+import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
 import org.apache.hadoop.mapreduce.server.jobtracker.TaskTracker;
 import org.apache.hadoop.util.RunJar;
+
 
 public class FifoWorkflowScheduler extends TaskScheduler implements
     WorkflowScheduler {
@@ -229,7 +231,7 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
             JobConf jobConf = workflow.getConf().getJobs().get(jobName);
 
             // Check the jar for a manifest & add required attributes.
-            updateJarManifest(jobConf);
+            updateJarManifest(workflow.getConf(), jobConf);
 
             // Submit the job.
             LOG.info("Submitting workflow job: " + jobConf.getJar());
@@ -258,13 +260,18 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
 
   // Check that the jar file has a manifest, and if not then add one.
   // Write configuration properties to the jar file's manifest.
-  private void updateJarManifest(JobConf jobConf) throws IOException {
+  private void updateJarManifest(WorkflowConf workflowConf, JobConf jobConf)
+      throws IOException {
     LOG.info("In updateJarManifest.");
 
-    String fileName = jobConf.getJar();
-    JarInputStream jarInput = new JarInputStream(new FileInputStream(fileName));
+    FileSystem fileSystem = FileSystem.get(workflowConf);
+    Path filePath = new Path(jobConf.getJar());
+    Path newJarFile = new Path(filePath.toString() + ".tmp");
+
+    // Read/create the manifest.
+    JarInputStream jarInput = new JarInputStream(fileSystem.open(filePath));
     Manifest manifest = jarInput.getManifest();
-    LOG.info("Jar file is located at: " + fileName);
+    LOG.info("Jar file is located at: " + filePath.toString());
 
     if (manifest == null) {
       LOG.info("Manifest is null.");
@@ -283,7 +290,7 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
     LOG.info("Added manifest attributes.");
 
     // Write the new jar file.
-    FileOutputStream out = new FileOutputStream(fileName + ".tmp", false);
+    FSDataOutputStream out = fileSystem.create(newJarFile);
     JarOutputStream jarOutput = new JarOutputStream(out, manifest);
 
     JarEntry entry;
@@ -303,10 +310,8 @@ public class FifoWorkflowScheduler extends TaskScheduler implements
     LOG.info("Created new jar.");
 
     // Remove the old jar & rename the new one.
-    File jarIn = new File(fileName);
-    File jarOut = new File(fileName + ".tmp");
-    jarIn.delete();
-    jarOut.renameTo(jarIn);
+    fileSystem.delete(filePath, true);
+    fileSystem.rename(newJarFile, filePath);
     LOG.info("Deleted old jar & renamed new one.");
   }
 

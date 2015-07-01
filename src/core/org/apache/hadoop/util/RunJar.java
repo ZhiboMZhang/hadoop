@@ -36,11 +36,17 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
+import org.apache.hadoop.fs.Path;
 
 /** Run a Hadoop job jar. */
 public class RunJar {
+
+  private static final Log LOG = LogFactory.getLog(RunJar.class);
 
   /** Unpack a jar file into a directory. */
   public static void unJar(File jarFile, File toDir) throws IOException {
@@ -83,6 +89,7 @@ public class RunJar {
    * then it must be provided on the command line. */
   public static void main(String[] args) throws Throwable {
     String usage = "RunJar jarFile [mainClass [args...]]";
+    LOG.info("Got args: " + Arrays.toString(args));
 
     // Jar file name is required.
     if (args.length < 1) {
@@ -91,8 +98,30 @@ public class RunJar {
     }
 
     int currentArg = 0;
-
+    boolean jobInHdfs = false;
     String fileName = args[currentArg++];
+
+    // Check to see if the jar file is in hdfs. If so copy it to the local
+    // filesystem so that it can be unjarred and run. Then remove it after.
+    Configuration configuration = new Configuration();
+    FileSystem hdfs = FileSystem.get(configuration);
+    FileSystem localfs = FileSystem.getLocal(configuration);
+
+    Path filePath = new Path(fileName);
+    if (hdfs.exists(filePath)) {
+      LOG.info("Jar is located in HDFS at " + filePath);
+
+      // Get the jar name from the path.
+      String[] tokens = fileName.split(Path.SEPARATOR);
+      String newFileName = tokens[tokens.length - 1];
+
+      LOG.info("Copying jar to local file " + newFileName);
+      hdfs.copyToLocalFile(filePath, new Path(newFileName));
+
+      fileName = newFileName;
+      jobInHdfs = true;
+    }
+
     File file = new File(fileName);
     if (!file.exists() || !file.isFile()) {
       System.err.println("Not a valid JAR: " + file.getCanonicalPath());
@@ -152,16 +181,15 @@ public class RunJar {
     }
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
-        public void run() {
-          try {
-            FileUtil.fullyDelete(workDir);
-          } catch (IOException e) {
-          }
-        }
-      });
+      public void run() {
+        try {
+          FileUtil.fullyDelete(workDir);
+        } catch (IOException e) {}
+      }
+    });
 
     unJar(file, workDir);
-    
+
     ArrayList<URL> classPath = new ArrayList<URL>();
     classPath.add(new File(workDir + "/").toURI().toURL());
     classPath.add(file.toURI().toURL());
@@ -201,7 +229,17 @@ public class RunJar {
     try {
       System.out.println("Running " + mainClass.getCanonicalName()
           + " with args: " + Arrays.toString(newArgs));
+      LOG.info("Running " + mainClass.getCanonicalName() + " with args: "
+          + Arrays.toString(newArgs));
       main.invoke(null, new Object[] { newArgs });
+
+      // Delete the job jar file if it was copied from HDFS.
+      if (jobInHdfs) {
+        Path localPath = localfs.makeQualified(new Path(fileName));
+        localfs.delete(localPath, true);
+        LOG.info("Jar file at " + localPath + " was deleted.");
+      }
+
     } catch (InvocationTargetException e) {
       throw e.getTargetException();
     }

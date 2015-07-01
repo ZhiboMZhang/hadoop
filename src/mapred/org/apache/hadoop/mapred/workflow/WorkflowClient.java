@@ -310,16 +310,15 @@ public class WorkflowClient extends Configured {
       public RunningWorkflow run() throws FileNotFoundException,
           ClassNotFoundException, InterruptedException, IOException {
 
-        WorkflowConf workflowCopy = workflow;
         WorkflowStatus status = null;
         FileSystem submitFs = null;
 
         // Set up the workflow staging area.
         Path stagingArea = WorkflowSubmissionFiles.getStagingDir(
-            WorkflowClient.this, workflowCopy);
+            WorkflowClient.this, workflow);
         WorkflowID workflowId = workflowSubmitClient.getNewWorkflowId();
         Path submitWorkflowDir = new Path(stagingArea, workflowId.toString());
-        workflowCopy.set("mapreduce.workflow.dir", submitWorkflowDir.toString());
+        workflow.set("mapreduce.workflow.dir", submitWorkflowDir.toString());
 
         LOG.info("Set up workflow staging area.");
         LOG.info("WorkflowID: " + workflowId.toString());
@@ -336,7 +335,7 @@ public class WorkflowClient extends Configured {
 
           // Read in the machine type information.
           // TODO: Should this file location/name be set in configuration?
-          Path workflowJar = new Path(workflowCopy.getJar());
+          Path workflowJar = new Path(workflow.getJar());
           String machineXml = workflowJar.getParent().toString()
               + Path.SEPARATOR + "machineTypes.xml";
           Set<MachineType> machineTypes = MachineType.parse(machineXml);
@@ -352,24 +351,24 @@ public class WorkflowClient extends Configured {
           LOG.info("Loaded time-price table.");
 
           // Initialize/compute job information.
-          updateJobInfo(workflowCopy, workflowId);
-          updateJobIoPaths(workflowCopy);
+          updateJobInfo(workflow, workflowId);
+          updateJobIoPaths(workflow);
 
           // Check output.
-          checkOutputSpecification(workflowCopy);
+          checkOutputSpecification(workflow);
 
           // Generate the scheduling plan. Needs to provide:
           // - ordering of tasks to be executed
           // - pairing, each task to a machine type
-          SchedulingPlan plan = workflowCopy.getSchedulingPlan();
-          if (!plan.generatePlan(machineTypes, machines, table, workflowCopy)) {
+          SchedulingPlan plan = workflow.getSchedulingPlan();
+          if (!plan.generatePlan(machineTypes, machines, table, workflow)) {
             throw new IOException("Workflow constraints are infeasible. Exiting.");
           }
 
           workflowSubmitClient.setWorkflowSchedulingPlan(plan);
 
           // Write configuration into HDFS so that JobTracker can read it.
-          copyAndConfigureFiles(workflowCopy, submitWorkflowDir, submitFs);
+          copyAndConfigureFiles(workflow, submitWorkflowDir, submitFs);
 
           // Submit the workflow.
           status = workflowSubmitClient.submitWorkflow(workflowId,
@@ -568,7 +567,7 @@ public class WorkflowClient extends Configured {
    * @throws IOException
    * @throws InterruptedException
    */
-  private void copyAndConfigureFiles(final WorkflowConf workflow,
+  private void copyAndConfigureFiles(WorkflowConf workflow,
       Path submitWorkflowDir, FileSystem fileSystem) throws IOException,
       InterruptedException {
 
@@ -592,6 +591,39 @@ public class WorkflowClient extends Configured {
 
     LOG.info("Created workflow directory: " + submitWorkflowDir.toString());
 
+    // Copy over the job jar files to hdfs.
+    // Additional information that is added to the jar manifests will be added
+    // after the files are copied. This also allows us to handle the case where
+    // multiple jobs use the same jar file/code.
+    for (JobConf conf : workflow.getJobs().values()) {
+      String oldJobJar = conf.getJar();
+      Path oldJobJarFile = new Path(oldJobJar);
+      Path newJobJarFile =
+          WorkflowSubmissionFiles.getJobJar(submitWorkflowDir, conf);
+
+      conf.setJar(newJobJarFile.toString());
+      fileSystem.copyFromLocalFile(oldJobJarFile, newJobJarFile);
+      fileSystem.setReplication(newJobJarFile, replication);
+      fileSystem.setPermission(newJobJarFile, new FsPermission(
+          WorkflowSubmissionFiles.WORKFLOW_JAR_PERMISSION));
+
+      LOG.info("Copied over job jar file into " + newJobJarFile);
+    }
+
+    // Copy over the workflow jar file to hdfs (TODO: not used currently).
+    String oldWorkflowJar = workflow.getJar();
+    Path oldWorkflowJarFile = new Path(oldWorkflowJar);
+    Path newWorkflowJarFile =
+        WorkflowSubmissionFiles.getWorkflowJar(submitWorkflowDir, workflow);
+
+    workflow.setJar(newWorkflowJarFile.toString());
+    fileSystem.copyFromLocalFile(oldWorkflowJarFile, newWorkflowJarFile);
+    fileSystem.setReplication(newWorkflowJarFile, replication);
+    fileSystem.setPermission(newWorkflowJarFile, new FsPermission(
+        WorkflowSubmissionFiles.WORKFLOW_JAR_PERMISSION));
+
+    LOG.info("Copied over workflow jar file into " + newWorkflowJarFile);
+
     // Copy the workflow configuration, to allow loading from JobTracker.
     Path confDir = WorkflowSubmissionFiles.getConfDir(submitWorkflowDir);
     FileSystem.mkdirs(fileSystem, confDir, mapredSysPerms);
@@ -599,23 +631,6 @@ public class WorkflowClient extends Configured {
         replication);
 
     LOG.info("Wrote workflow configuration into " + confDir);
-
-    // TODO: move jar files to dfs
-    // TODO: should I also be moving over the individual job configurations?
-
-    // Copy over the workflow jar file (TODO: is this necessary?).
-    String oldWorkflowJarPath = workflow.getJar();
-    Path oldWorkflowJarFile = new Path(oldWorkflowJarPath);
-    Path newWorkflowJarFile = WorkflowSubmissionFiles
-        .getWorkflowJar(submitWorkflowDir);
-
-    workflow.setJar(newWorkflowJarFile.toString());
-    fileSystem.copyFromLocalFile(oldWorkflowJarFile, newWorkflowJarFile);
-    fileSystem.setReplication(newWorkflowJarFile, replication);
-    fileSystem.setPermission(newWorkflowJarFile, new FsPermission(
-        WorkflowSubmissionFiles.WORKFLOW_DIR_PERMISSION));
-
-    LOG.info("Copied over workflow jar file into " + newWorkflowJarFile);
   }
 
   /**
