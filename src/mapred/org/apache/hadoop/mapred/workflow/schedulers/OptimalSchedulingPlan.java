@@ -24,6 +24,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,11 +34,11 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.MachineType;
-import org.apache.hadoop.mapred.workflow.WorkflowUtil;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
+import org.apache.hadoop.mapred.workflow.WorkflowUtil;
 import org.apache.hadoop.mapred.workflow.scheduling.WorkflowDAG;
 import org.apache.hadoop.mapred.workflow.scheduling.WorkflowNode;
 import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingPlan;
@@ -63,6 +64,22 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
       WorkflowConf workflow) throws IOException {
 
     LOG.info("In OptimalSchedulingPlan generatePlan() function.");
+
+    // Get a mapping between actual available machines and machine types.
+    trackerMapping = WorkflowUtil.matchResourceTypes(machineTypes, machines);
+
+    for (String type : trackerMapping.keySet()) {
+      LOG.info("Mapped machinetype " + type + " to " + trackerMapping.get(type));
+    }
+
+    // Remove machine types that don't currently exist on the cluster.
+    Iterator<MachineType> machineTypeIterator = machineTypes.iterator();
+    while (machineTypeIterator.hasNext()) {
+      MachineType machineType = machineTypeIterator.next();
+      if (!trackerMapping.values().contains(machineType.getName())) {
+        machineTypeIterator.remove();
+      }
+    }
 
     // Create a map from machine type name to the actual MachineType.
     Map<String, MachineType> machineType = new HashMap<String, MachineType>();
@@ -175,12 +192,6 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
       LOG.info("Added pair: " + node.getJobName() + "/" + node);
     }
 
-    // Get a mapping between actual available machines and machine types.
-    trackerMapping = WorkflowUtil.matchResourceTypes(machineTypes, machines);
-
-    for (String type : trackerMapping.keySet()) {
-      LOG.info("Mapped machinetype " + type + " to " + trackerMapping.get(type));
-    }
     return true;
   }
 
