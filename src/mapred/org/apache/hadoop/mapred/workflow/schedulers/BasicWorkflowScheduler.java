@@ -48,10 +48,10 @@ import org.apache.hadoop.mapreduce.server.jobtracker.TaskTracker;
 import org.apache.hadoop.util.RunJar;
 
 
-public class GreedyWorkflowScheduler extends TaskScheduler implements
+public class BasicWorkflowScheduler extends TaskScheduler implements
     WorkflowScheduler {
 
-  private static final Log LOG = LogFactory.getLog(GreedyWorkflowScheduler.class);
+  private static final Log LOG = LogFactory.getLog(BasicWorkflowScheduler.class);
 
   private WorkflowListener workflowListener;
   private EagerTaskInitializationListener eagerTaskInitializationListener;
@@ -59,7 +59,7 @@ public class GreedyWorkflowScheduler extends TaskScheduler implements
   private WorkflowSchedulingProtocol workflowSchedulingProtocol;
   private SchedulingPlan schedulingPlan;
 
-  public GreedyWorkflowScheduler() {
+  public BasicWorkflowScheduler() {
     workflowListener = new WorkflowListener();
   }
 
