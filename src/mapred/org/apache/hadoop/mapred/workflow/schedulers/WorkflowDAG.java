@@ -282,7 +282,7 @@ public class WorkflowDAG implements Writable {
           // IOException because info wasn't read from the configuration file.
           throw new IOException("Entry for " + node.getJobName() + " ("
               + (task.isMapTask() ? "map" : "reduce") + ") / " + type
-              + " does not exist in time price table.");
+              + " does not exist in the time price table.");
         }
       }
     }

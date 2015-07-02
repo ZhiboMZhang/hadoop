@@ -20,7 +20,9 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 
 import org.apache.hadoop.io.Text;
@@ -32,13 +34,15 @@ import org.apache.hadoop.io.Writable;
 public class WorkflowNode implements Writable {
 
   private String jobName;
-  private List<WorkflowTask> tasks;
+  private List<WorkflowTask> mapTasks;
+  private List<WorkflowTask> redTasks;
 
   /**
    * Only to be used when calling readFields() afterwards.
    */
   public WorkflowNode() {
-    tasks = new ArrayList<WorkflowTask>();
+    mapTasks = new ArrayList<WorkflowTask>();
+    redTasks = new ArrayList<WorkflowTask>();
   }
 
   /**
@@ -55,10 +59,10 @@ public class WorkflowNode implements Writable {
 
     this.jobName = job;
     for (int i = 0; i < numMapTasks; i++) {
-      tasks.add(new WorkflowTask(this, true));
+      mapTasks.add(new WorkflowTask(this, true));
     }
     for (int i = 0; i < numRedTasks; i++) {
-      tasks.add(new WorkflowTask(this, false));
+      redTasks.add(new WorkflowTask(this, false));
     }
   }
 
@@ -70,9 +74,27 @@ public class WorkflowNode implements Writable {
   }
 
   /**
+   * Return a collection of the map tasks belonging to this job/node.
+   */
+  public Collection<WorkflowTask> getMapTasks() {
+    return mapTasks;
+  }
+
+  /**
+   * Return a collection of reduce tasks belonging to this job/node.
+   */
+  public Collection<WorkflowTask> getReduceTasks() {
+    return redTasks;
+  }
+
+  /**
    * Return a collection of the tasks belonging to this job/node.
    */
   public Collection<WorkflowTask> getTasks() {
+    Collection<WorkflowTask> tasks = new HashSet<WorkflowTask>();
+    tasks.addAll(mapTasks);
+    tasks.addAll(redTasks);
+
     return tasks;
   }
 
@@ -80,16 +102,12 @@ public class WorkflowNode implements Writable {
    * Return the number of tasks this job/node has.
    */
   public int getNumTasks() {
-    return tasks.size();
+    return mapTasks.size() + redTasks.size();
   }
 
   @Override
   public String toString() {
-    String rep = jobName + ": ";
-    for (WorkflowTask task : tasks) {
-      rep += task.toString() + ", ";
-    }
-    return rep;
+    return jobName + ": " + Arrays.toString(getTasks().toArray()) + ".";
   }
 
   @Override
@@ -100,7 +118,7 @@ public class WorkflowNode implements Writable {
     for (int i = 0; i < numTasks; i++) {
       WorkflowTask task = new WorkflowTask();
       task.readFields(in);
-      tasks.add(task);
+      if (task.isMapTask()) { mapTasks.add(task); } else { redTasks.add(task); }
     }
   }
 
@@ -108,8 +126,8 @@ public class WorkflowNode implements Writable {
   public void write(DataOutput out) throws IOException {
     Text.writeString(out, jobName);
 
-    out.writeInt(tasks.size());
-    for (WorkflowTask task : tasks) {
+    out.writeInt(getNumTasks());
+    for (WorkflowTask task : getTasks()) {
       task.write(out);
     }
   }
