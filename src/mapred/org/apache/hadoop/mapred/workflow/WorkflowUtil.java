@@ -14,7 +14,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.hadoop.mapred.workflow.schedulers;
+package org.apache.hadoop.mapred.workflow;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,9 +27,6 @@ import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.mapred.ResourceStatus;
-import org.apache.hadoop.mapred.workflow.MachineType;
-import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
-import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 
 public class WorkflowUtil {
 
@@ -158,14 +155,4 @@ public class WorkflowUtil {
     LOG.info("");
   }
 
-  public static void printTableInfo(Map<TableKey, TableEntry> table) {
-    LOG.info("Time Price Table:");
-    for (TableKey key : table.keySet()) {
-      TableEntry entry = table.get(key);
-      LOG.info(entry.jobName + "/" + entry.machineTypeName + "/"
-          + (entry.isMapTask ? "map" : "red") + ": " + entry.execTime
-          + "seconds, $" + entry.cost);
-    }
-    LOG.info("");
-  }
 }

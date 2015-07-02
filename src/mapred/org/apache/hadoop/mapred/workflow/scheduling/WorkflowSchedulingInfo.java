@@ -1,9 +1,10 @@
-package org.apache.hadoop.mapred.workflow.schedulers;
+package org.apache.hadoop.mapred.workflow.scheduling;
 
 import org.apache.hadoop.mapred.workflow.WorkflowID;
 import org.apache.hadoop.mapred.workflow.WorkflowStatus;
 
-class WorkflowSchedulingInfo extends SchedulingInfo {
+
+public class WorkflowSchedulingInfo extends SchedulingInfo {
 
   private WorkflowID id;
 

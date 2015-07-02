@@ -21,7 +21,7 @@ import java.io.IOException;
 import org.apache.hadoop.mapred.ClusterStatus;
 import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.JobTracker;
-import org.apache.hadoop.mapred.workflow.schedulers.WorkflowSchedulingProtocol;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingProtocol;
 
 /**
  * Protocol that a {@link WorkflowClient} and the {@link JobTracker} use to

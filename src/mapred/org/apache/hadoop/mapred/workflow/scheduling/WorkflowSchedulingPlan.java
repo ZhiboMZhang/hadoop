@@ -14,7 +14,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.hadoop.mapred.workflow;
+package org.apache.hadoop.mapred.workflow.scheduling;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -25,10 +25,12 @@ import java.util.Set;
 
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.ResourceStatus;
+import org.apache.hadoop.mapred.workflow.MachineType;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
+import org.apache.hadoop.mapred.workflow.WorkflowConf;
 
-public abstract class SchedulingPlan implements Writable {
+public abstract class WorkflowSchedulingPlan implements Writable {
 
   /**
    * Generate a scheduling plan.

@@ -41,25 +41,28 @@ import org.apache.hadoop.mapred.JobStatus;
 import org.apache.hadoop.mapred.Task;
 import org.apache.hadoop.mapred.TaskScheduler;
 import org.apache.hadoop.mapred.TaskTrackerStatus;
-import org.apache.hadoop.mapred.workflow.SchedulingPlan;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowListener;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowScheduler;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingPlan;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingProtocol;
 import org.apache.hadoop.mapreduce.server.jobtracker.TaskTracker;
 import org.apache.hadoop.util.RunJar;
 
 
-public class BasicWorkflowScheduler extends TaskScheduler implements
+public class WorkflowTaskScheduler extends TaskScheduler implements
     WorkflowScheduler {
 
-  private static final Log LOG = LogFactory.getLog(BasicWorkflowScheduler.class);
+  private static final Log LOG = LogFactory.getLog(WorkflowTaskScheduler.class);
 
   private WorkflowListener workflowListener;
   private EagerTaskInitializationListener eagerTaskInitializationListener;
 
   private WorkflowSchedulingProtocol workflowSchedulingProtocol;
-  private SchedulingPlan schedulingPlan;
+  private WorkflowSchedulingPlan schedulingPlan;
 
-  public BasicWorkflowScheduler() {
+  public WorkflowTaskScheduler() {
     workflowListener = new WorkflowListener();
   }
 

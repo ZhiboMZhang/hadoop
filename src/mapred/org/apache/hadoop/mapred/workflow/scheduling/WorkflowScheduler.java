@@ -14,7 +14,8 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.hadoop.mapred.workflow.schedulers;
+package org.apache.hadoop.mapred.workflow.scheduling;
+
 
 
 /**

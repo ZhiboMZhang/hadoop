@@ -14,7 +14,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.hadoop.mapred.workflow.schedulers;
+package org.apache.hadoop.mapred.workflow.scheduling;
 
 import java.io.IOException;
 import java.util.Collection;

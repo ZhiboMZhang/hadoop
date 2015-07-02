@@ -1,4 +1,4 @@
-package org.apache.hadoop.mapred.workflow.schedulers;
+package org.apache.hadoop.mapred.workflow.scheduling;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -16,9 +16,10 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.MachineType;
+import org.apache.hadoop.mapred.workflow.TimePriceTable;
+import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
-import org.apache.hadoop.mapred.workflow.WorkflowConf;
 
 /**
  * Class representing a workflow directed acyclic graph.

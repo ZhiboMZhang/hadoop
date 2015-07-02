@@ -36,6 +36,7 @@ import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 import org.apache.hadoop.mapred.workflow.schedulers.GreedySchedulingPlan;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingPlan;
 import org.apache.hadoop.util.ClassUtil;
 import org.apache.hadoop.util.ReflectionUtils;
 
@@ -61,7 +62,7 @@ public class WorkflowConf extends Configuration implements Writable {
   public static final String SCHEDULING_PLAN_PROPERTY_NAME =
       "mapred.workflow.scheduler";
 
-  private SchedulingPlan schedulingPlan;
+  private WorkflowSchedulingPlan schedulingPlan;
   private Map<String, JobConf> jobs;
   private Map<String, Set<String>> dependencies;
 
@@ -79,10 +80,10 @@ public class WorkflowConf extends Configuration implements Writable {
     setJarByClass(exampleClass);
 
     // Load the specified scheduling plan
-    Class<? extends SchedulingPlan> clazz =
+    Class<? extends WorkflowSchedulingPlan> clazz =
         this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, GreedySchedulingPlan.class,
-            SchedulingPlan.class);
-    schedulingPlan = (SchedulingPlan) ReflectionUtils.newInstance(clazz, this);
+            WorkflowSchedulingPlan.class);
+    schedulingPlan = (WorkflowSchedulingPlan) ReflectionUtils.newInstance(clazz, this);
     LOG.info("Created new schedulingPlan: " + schedulingPlan.toString());;
   }
 
@@ -125,7 +126,7 @@ public class WorkflowConf extends Configuration implements Writable {
     return schedulingPlan.generatePlan(machineTypes, machines, table, this);
   }
 
-  public SchedulingPlan getSchedulingPlan() {
+  public WorkflowSchedulingPlan getSchedulingPlan() {
     return schedulingPlan;
   }
 
@@ -381,10 +382,10 @@ public class WorkflowConf extends Configuration implements Writable {
     }
 
     // Read in other properties.
-    Class<? extends SchedulingPlan> clazz =
+    Class<? extends WorkflowSchedulingPlan> clazz =
         this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, GreedySchedulingPlan.class,
-            SchedulingPlan.class);
-    schedulingPlan = (SchedulingPlan) ReflectionUtils.newInstance(clazz, this);
+            WorkflowSchedulingPlan.class);
+    schedulingPlan = (WorkflowSchedulingPlan) ReflectionUtils.newInstance(clazz, this);
     schedulingPlan.readFields(in);
   }
 

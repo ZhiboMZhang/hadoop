@@ -35,15 +35,19 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.MachineType;
-import org.apache.hadoop.mapred.workflow.SchedulingPlan;
+import org.apache.hadoop.mapred.workflow.WorkflowUtil;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowDAG;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowNode;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingPlan;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowTask;
 import org.apache.hadoop.mapreduce.TaskType;
 
 
-public class GreedySchedulingPlan extends SchedulingPlan {
+public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
 
   private static class WorkflowTaskPair {
 

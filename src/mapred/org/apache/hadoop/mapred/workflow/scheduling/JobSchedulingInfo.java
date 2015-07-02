@@ -1,11 +1,11 @@
-package org.apache.hadoop.mapred.workflow.schedulers;
+package org.apache.hadoop.mapred.workflow.scheduling;
 
 import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.JobPriority;
 import org.apache.hadoop.mapred.JobStatus;
 
 // See JobQueueJobInProgressListener
-class JobSchedulingInfo extends SchedulingInfo {
+public class JobSchedulingInfo extends SchedulingInfo {
 
   private JobPriority priority;
   private JobID id;

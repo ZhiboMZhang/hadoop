@@ -14,13 +14,12 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.hadoop.mapred.workflow.schedulers;
+package org.apache.hadoop.mapred.workflow.scheduling;
 
 import org.apache.hadoop.ipc.VersionedProtocol;
-import org.apache.hadoop.mapred.workflow.SchedulingPlan;
 
 /**
- * A {@link WorkflowSchedulingProtocol} allows its {@link SchedulingPlan} to be
+ * A {@link WorkflowSchedulingProtocol} allows its {@link WorkflowSchedulingPlan} to be
  * set and retrieved.
  */
 public interface WorkflowSchedulingProtocol extends VersionedProtocol {
@@ -28,17 +27,17 @@ public interface WorkflowSchedulingProtocol extends VersionedProtocol {
   public static long versionID = 1L;
 
   /**
-   * Set the {@link SchedulingPlan} of the protocol.
+   * Set the {@link WorkflowSchedulingPlan} of the protocol.
    *
    * @param schedulingPlan The scheduling plan to set.
    */
-  public void setWorkflowSchedulingPlan(SchedulingPlan schedulingPlan);
+  public void setWorkflowSchedulingPlan(WorkflowSchedulingPlan schedulingPlan);
 
   /**
-   * Get the {@link SchedulingPlan} of the protocol.
+   * Get the {@link WorkflowSchedulingPlan} of the protocol.
    *
    * @return The scheduling plan.
    */
-  public SchedulingPlan getWorkflowSchedulingPlan();
+  public WorkflowSchedulingPlan getWorkflowSchedulingPlan();
 
 }

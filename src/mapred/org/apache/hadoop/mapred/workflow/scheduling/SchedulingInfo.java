@@ -1,7 +1,7 @@
-package org.apache.hadoop.mapred.workflow.schedulers;
+package org.apache.hadoop.mapred.workflow.scheduling;
 
 
-abstract class SchedulingInfo {
+public abstract class SchedulingInfo {
 
   private long startTime;
 

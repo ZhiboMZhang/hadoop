@@ -250,4 +250,18 @@ public class TimePriceTable {
     }
   }
 
+  /**
+   * Print a time-price table.
+   */
+  public static void print(Map<TableKey, TableEntry> table) {
+    LOG.info("Time Price Table:");
+    for (TableKey key : table.keySet()) {
+      TableEntry entry = table.get(key);
+      LOG.info(entry.jobName + "/" + entry.machineTypeName + "/"
+          + (entry.isMapTask ? "map" : "red") + ": " + entry.execTime
+          + "seconds, $" + entry.cost);
+    }
+    LOG.info("");
+  }
+
 }

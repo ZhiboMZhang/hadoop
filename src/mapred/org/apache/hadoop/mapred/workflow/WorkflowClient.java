@@ -49,7 +49,7 @@ import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.SafeModeException;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
-import org.apache.hadoop.mapred.workflow.schedulers.WorkflowUtil;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingPlan;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -352,7 +352,7 @@ public class WorkflowClient extends Configured {
           TimePriceTable.update(table, machineTypes);
 
           LOG.info("Loaded time-price table.");
-          WorkflowUtil.printTableInfo(table);
+          TimePriceTable.print(table);
 
           // TODO: Check that all jobs have an entry in the Time-Price table.
           // TODO: Check that all machine types exist in the cluster.
@@ -367,7 +367,7 @@ public class WorkflowClient extends Configured {
           // Generate the scheduling plan. Needs to provide:
           // - ordering of tasks to be executed
           // - pairing, each task to a machine type
-          SchedulingPlan plan = workflow.getSchedulingPlan();
+          WorkflowSchedulingPlan plan = workflow.getSchedulingPlan();
           if (!plan.generatePlan(machineTypes, machines, table, workflow)) {
             throw new IOException("Workflow constraints are infeasible. Exiting.");
           }
@@ -570,33 +570,34 @@ public class WorkflowClient extends Configured {
    * Configure the {@link WorkflowConf} of the user.
    *
    * @param workflow The workflow configuration.
-   * @param submitWorkflowDir The directory used by the workflow when submitted.
+   * @param submitDir The directory used by the workflow when submitted.
    * @throws IOException
    * @throws InterruptedException
    */
   private void copyAndConfigureFiles(WorkflowConf workflow,
-      Path submitWorkflowDir, FileSystem fileSystem) throws IOException,
+ Path submitDir,
+      FileSystem fileSystem) throws IOException,
       InterruptedException {
 
     LOG.info("In WorkflowClient copyAndConfigureFiles function.");
 
     short replication = (short) workflow.getInt("mapred.submit.replcation", 1);
 
-    fileSystem = submitWorkflowDir.getFileSystem(workflow);
-    if (fileSystem.exists(submitWorkflowDir)) {
+    fileSystem = submitDir.getFileSystem(workflow);
+    if (fileSystem.exists(submitDir)) {
       throw new IOException("Not submitting workflow. Workflow directory "
-          + submitWorkflowDir + " already exists!! This is unexpected."
+          + submitDir + " already exists!! This is unexpected."
           + " Please check what files are in that directory.");
     }
 
     // Create the workflow directory.
     // Don't need to create job directories, they're made when the jobs are run.
-    submitWorkflowDir = fileSystem.makeQualified(submitWorkflowDir);
+    submitDir = fileSystem.makeQualified(submitDir);
     FsPermission mapredSysPerms = new FsPermission(
         WorkflowSubmissionFiles.WORKFLOW_DIR_PERMISSION);
-    FileSystem.mkdirs(fileSystem, submitWorkflowDir, mapredSysPerms);
+    FileSystem.mkdirs(fileSystem, submitDir, mapredSysPerms);
 
-    LOG.info("Created workflow directory: " + submitWorkflowDir.toString());
+    LOG.info("Created workflow directory: " + submitDir.toString());
 
     // Copy over the job jar files to hdfs.
     // Additional information that is added to the jar manifests will be added
@@ -605,8 +606,7 @@ public class WorkflowClient extends Configured {
     for (JobConf conf : workflow.getJobs().values()) {
       String oldJobJar = conf.getJar();
       Path oldJobJarFile = new Path(oldJobJar);
-      Path newJobJarFile =
-          WorkflowSubmissionFiles.getJobJar(submitWorkflowDir, conf);
+      Path newJobJarFile = WorkflowSubmissionFiles.getJobJar(submitDir, conf);
 
       conf.setJar(newJobJarFile.toString());
       fileSystem.copyFromLocalFile(oldJobJarFile, newJobJarFile);
@@ -621,7 +621,7 @@ public class WorkflowClient extends Configured {
     String oldWorkflowJar = workflow.getJar();
     Path oldWorkflowJarFile = new Path(oldWorkflowJar);
     Path newWorkflowJarFile =
-        WorkflowSubmissionFiles.getWorkflowJar(submitWorkflowDir, workflow);
+        WorkflowSubmissionFiles.getWorkflowJar(submitDir, workflow);
 
     workflow.setJar(newWorkflowJarFile.toString());
     fileSystem.copyFromLocalFile(oldWorkflowJarFile, newWorkflowJarFile);
@@ -632,7 +632,7 @@ public class WorkflowClient extends Configured {
     LOG.info("Copied over workflow jar file into " + newWorkflowJarFile);
 
     // Copy the workflow configuration, to allow loading from JobTracker.
-    Path confDir = WorkflowSubmissionFiles.getConfDir(submitWorkflowDir);
+    Path confDir = WorkflowSubmissionFiles.getConfDir(submitDir);
     FileSystem.mkdirs(fileSystem, confDir, mapredSysPerms);
     WorkflowSubmissionFiles.writeConf(fileSystem, confDir, workflow,
         replication);

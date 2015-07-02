@@ -75,7 +75,6 @@ import org.apache.hadoop.mapred.JobInProgress.KillInterruptedException;
 import org.apache.hadoop.mapred.JobStatusChangeEvent.EventType;
 import org.apache.hadoop.mapred.QueueManager.QueueACL;
 import org.apache.hadoop.mapred.TaskTrackerStatus.TaskTrackerHealthStatus;
-import org.apache.hadoop.mapred.workflow.SchedulingPlan;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowID;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
@@ -85,7 +84,8 @@ import org.apache.hadoop.mapred.workflow.WorkflowProfile;
 import org.apache.hadoop.mapred.workflow.WorkflowStatus;
 import org.apache.hadoop.mapred.workflow.WorkflowSubmissionFiles;
 import org.apache.hadoop.mapred.workflow.WorkflowSubmissionProtocol;
-import org.apache.hadoop.mapred.workflow.schedulers.WorkflowScheduler;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowScheduler;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingPlan;
 import org.apache.hadoop.mapreduce.ClusterMetrics;
 import org.apache.hadoop.mapreduce.TaskType;
 import org.apache.hadoop.mapreduce.security.TokenCache;
@@ -3597,13 +3597,13 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
   // //////////////////////////////////////////////////
 
   // TODO: WORKFLOW
-  private SchedulingPlan schedulingPlan = null;
+  private WorkflowSchedulingPlan schedulingPlan = null;
 
-  public void setWorkflowSchedulingPlan(SchedulingPlan schedulingPlan) {
+  public void setWorkflowSchedulingPlan(WorkflowSchedulingPlan schedulingPlan) {
     this.schedulingPlan = schedulingPlan;
   }
 
-  public SchedulingPlan getWorkflowSchedulingPlan() {
+  public WorkflowSchedulingPlan getWorkflowSchedulingPlan() {
     return schedulingPlan;
   }
 
