@@ -35,7 +35,7 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
-import org.apache.hadoop.mapred.workflow.schedulers.FifoSchedulingPlan;
+import org.apache.hadoop.mapred.workflow.schedulers.GreedySchedulingPlan;
 import org.apache.hadoop.util.ClassUtil;
 import org.apache.hadoop.util.ReflectionUtils;
 
@@ -80,7 +80,7 @@ public class WorkflowConf extends Configuration implements Writable {
 
     // Load the specified scheduling plan
     Class<? extends SchedulingPlan> clazz =
-        this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, FifoSchedulingPlan.class,
+        this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, GreedySchedulingPlan.class,
             SchedulingPlan.class);
     schedulingPlan = (SchedulingPlan) ReflectionUtils.newInstance(clazz, this);
     LOG.info("Created new schedulingPlan: " + schedulingPlan.toString());;
@@ -382,7 +382,7 @@ public class WorkflowConf extends Configuration implements Writable {
 
     // Read in other properties.
     Class<? extends SchedulingPlan> clazz =
-        this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, FifoSchedulingPlan.class,
+        this.getClass(SCHEDULING_PLAN_PROPERTY_NAME, GreedySchedulingPlan.class,
             SchedulingPlan.class);
     schedulingPlan = (SchedulingPlan) ReflectionUtils.newInstance(clazz, this);
     schedulingPlan.readFields(in);

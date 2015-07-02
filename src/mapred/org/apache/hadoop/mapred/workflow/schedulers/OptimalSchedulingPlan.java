@@ -24,11 +24,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -42,41 +40,9 @@ import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
 import org.apache.hadoop.mapreduce.TaskType;
 
+public class OptimalSchedulingPlan extends SchedulingPlan {
 
-public class GreedySchedulingPlan extends SchedulingPlan {
-
-  private static class WorkflowTaskPair {
-
-    WorkflowTask slowest;
-    WorkflowTask secondSlowest;
-
-    public WorkflowTaskPair(WorkflowTask slowest, WorkflowTask secondSlowest) {
-      this.slowest = slowest;
-      this.secondSlowest = secondSlowest;
-    }
-  }
-
-  private static class Utility implements Comparable<Utility> {
-
-    WorkflowTask slowestTask;
-    float utility;
-
-    public Utility(WorkflowTask slowestTask, float utility) {
-      this.slowestTask = slowestTask;
-      this.utility = utility;
-    }
-
-    @Override
-    public int compareTo(Utility other) {
-      // Want a larger utility, so sort in descending order.
-      if (utility == other.utility) { return 0; }
-      if (utility > other.utility) { return -1; }
-      if (utility < other.utility) { return 1; }
-      return 0;
-    }
-  }
-
-  private static final Log LOG = LogFactory.getLog(GreedySchedulingPlan.class);
+  private static final Log LOG = LogFactory.getLog(OptimalSchedulingPlan.class);
 
   private WorkflowDAG workflowDag;
 
@@ -92,7 +58,7 @@ public class GreedySchedulingPlan extends SchedulingPlan {
       Map<String, ResourceStatus> machines, Map<TableKey, TableEntry> table,
       WorkflowConf workflow) throws IOException {
 
-    LOG.info("In GreedySchedulingPlan generatePlan() function");
+    LOG.info("In OptimalSchedulingPlan generatePlan() function.");
 
     // Create a map from machine type name to the actual MachineType.
     Map<String, MachineType> machineType = new HashMap<String, MachineType>();
@@ -102,128 +68,102 @@ public class GreedySchedulingPlan extends SchedulingPlan {
     LOG.info("Created map for machineType names to machineType.");
 
     // Get a sorted list of machine types by cost/unit time.
-    List<MachineType> sortedMachines = new ArrayList<MachineType>(machineTypes);
-    Collections.sort(sortedMachines, WorkflowUtil.MACHINE_TYPE_COST_ORDER);
-
+    List<MachineType> sortedMachineTypes = new ArrayList<MachineType>(machineTypes);
+    Collections.sort(sortedMachineTypes, WorkflowUtil.MACHINE_TYPE_COST_ORDER);
     LOG.info("Sorted Machine Types.");
-    WorkflowUtil.printMachineTypesInfo(sortedMachines);
+    WorkflowUtil.printMachineTypesInfo(sortedMachineTypes);
 
     // Get the workflow DAG corresponding to the workflow configuration, &c.
     workflowDag = WorkflowDAG.construct(machineTypes, machines, workflow);
     LOG.info("Constructed WorkflowDAG.");
 
-    // Set all machines to use the least expensive machine type.
+    // Initially set all machines to use the least expensive machine type.
     for (WorkflowNode node : workflowDag.getNodes()) {
       for (WorkflowTask task : node.getTasks()) {
-        task.setMachineType(sortedMachines.get(0).getName());
+        task.setMachineType(sortedMachineTypes.get(0).getName());
       }
     }
     LOG.info("Set all nodes in workflow dag to least expensive type.");
-
+    
     // Check that constraints aren't violated.
     // Time is in seconds, Cost is in $$. (see {@link TableEntry})
-    float actualCost = workflowDag.getCost(table);
-    String constraint = workflow.getConstraint(Constraints.BUDGET);
-    float maxCost = WorkflowConf.parseBudgetConstraint(constraint);
+    float workflowCost = workflowDag.getCost(table);
+    String budgetConstraint = workflow.getConstraint(Constraints.BUDGET);
+    float constraintCost = WorkflowConf.parseBudgetConstraint(budgetConstraint);
     LOG.info("Computed initial path time and workflow cost.");
-    LOG.info("Workflow cost: " + actualCost + ", constraint: " + maxCost);
+    LOG.info("Workflow cost: " + workflowCost + ", constraint: " + constraintCost);
 
     // Budget isn't enough to run the workflow even on the cheapest machines.
-    if (actualCost > maxCost) {
+    if (workflowCost > constraintCost) {
       LOG.info("ERROR: Cheapest workflow cost is above budget constraint.");
       return false;
     }
     LOG.info("Cheapest workflow cost is below budget constraint, running alg.");
 
-    // Iteratively, find the task to be rescheduled.
-    // Find the best task on the critical path for rescheduling.
-    float remainingBudget = maxCost - actualCost;
-    while (remainingBudget >= 0) {
+    // Test all configurations of machineType to task mappings, selecting the
+    // set which results in the minimum execution time while still satisfying
+    // the budget constraint.
 
-      LOG.info("Next iteration of outer loop.  Budget left: " + remainingBudget);
-      List<WorkflowNode> criticalPath = workflowDag.getCriticalPath(table);
-      Collection<Utility> utilities = new TreeSet<Utility>();
+    // Compute the number of permutations.
+    // First create a list of tasks.
+    List<WorkflowTask> tasks = new ArrayList<WorkflowTask>();
+    for (WorkflowNode node : workflowDag.getNodes()) {
+      tasks.addAll(node.getTasks());
+    }
+    
+    // Generate the permutations.
+    List<List<MachineType>> permutations =
+        WorkflowUtil.<MachineType> getPermutations(machineTypes, tasks.size());
+    LOG.info("Generated machineType permutations.");
 
-      for (WorkflowNode node : criticalPath) {
-        LOG.info("Checking stages of node " + node.getJobName() + " on critical path.");
+    // Pair up a permutation to the task list.
+    float minTime = Float.MAX_VALUE;
+    Map<WorkflowTask, String> optimalScheduling =
+        new HashMap<WorkflowTask, String>();
 
-        // Find the slowest and second-slowests tasks in each stage.
-        WorkflowTaskPair mapPair = getSlowestPair(table, node.getMapTasks());
-        WorkflowTaskPair redPair = getSlowestPair(table, node.getReduceTasks());
-        LOG.info("Got slowest pair for map & reduce stages.");
+    for (List<MachineType> permutation : permutations) {
 
-        // Check if faster machine actually exists
-        int mapSlowestIdx = sortedMachines.indexOf(machineType.get(mapPair.slowest));
-        int redSlowestIdx = sortedMachines.indexOf(machineType.get(redPair.slowest));
-        LOG.info("Got slowest task index to check rescheduling ability.");
-
-        // Only consider a task for rescheduling if it can be rescheduled.
-        if (mapSlowestIdx < (sortedMachines.size() - 1)) {
-          // Compute the utility for each pair.
-          float mapUtility = computeUtility(table, mapPair, machineType, sortedMachines);
-          utilities.add(new Utility(mapPair.slowest, mapUtility));
-          LOG.info("Can reschedule map task.");
-        }
-
-        if (redSlowestIdx < (sortedMachines.size() - 1)) {
-          float redUtility = computeUtility(table, redPair, machineType, sortedMachines);
-          utilities.add(new Utility(redPair.slowest, redUtility));
-          LOG.info("Can reschedule reduce task.");
-        }
+      for (int i = 0; i < tasks.size(); i++) {
+        tasks.get(i).setMachineType(permutation.get(i).getName());
       }
+      LOG.info("Set " + permutations.indexOf(permutation) + "th permutation.");
 
-      Iterator<Utility> utilitiesIterator = utilities.iterator();
-      while (utilitiesIterator.hasNext()) {
-        WorkflowTask task = utilitiesIterator.next().slowestTask;
-        LOG.info("Checking utility of task " + task + ".");
+      // Calculate the cost and time.
+      // Time is in seconds, Cost is in $$. (see {@link TableEntry})
+      float actualCost = workflowDag.getCost(table);
+      String constraint = workflow.getConstraint(Constraints.BUDGET);
+      float maxCost = WorkflowConf.parseBudgetConstraint(constraint);
+      LOG.info("Workflow cost: " + actualCost + ", constraint: " + maxCost);
 
-        // Get the old and new costs to compare.
-        TableKey oldCostKey = new TableKey(
-            task.getJobName(),
-            task.getMachineType(),
-            task.isMapTask());
-        float oldCost = table.get(oldCostKey).cost;
+      if (actualCost > maxCost) {
+        LOG.info("Current schedule is above budget constraint, continuing.");
+        continue;
+      }
+      LOG.info("Current schedule is below budget constraint, considering.");
 
-        int currMachine = sortedMachines.indexOf(
-            machineType.get(task.getMachineType()));
-        String newMachine = sortedMachines.get(currMachine + 1).getName();
-
-        TableKey newCostKey = new TableKey(
-            task.getJobName(),
-            newMachine,
-            task.isMapTask());
-        float newCost = table.get(newCostKey).cost;
-
-        float costDifference = (newCost - oldCost);
-        if (remainingBudget < costDifference) {
-          LOG.info("Not enough budget to reschedule task " + task + ".");
-          // Don't consider rescheduling the task if it breaks the budget.
-          utilitiesIterator.remove();
-        } else {
-          LOG.info("Rescheduled task " + task + " to run on " + newMachine + ".");
-          // The task with the best utility can be rescheduled.. so do it!
-          task.setMachineType(newMachine);
-          remainingBudget -= costDifference;
-          // After rescheduling recalculate the critical path & utility values.
-          break;
+      // Update the taskMapping if necessary.
+      float actualTime = workflowDag.getTime(table);
+      if (actualTime < minTime) {
+        LOG.info("Current schedule is best seen so far, saving.");
+        minTime = actualTime;
+        optimalScheduling.clear();
+        
+        for (WorkflowTask task : tasks) {
+          optimalScheduling.put(task, task.getMachineType());
         }
       }
-
-      // Since the utilities are recomputed when one is used to reschedule a
-      // task, the if statement is only entered if no tasks are able to be
-      // rescheduled. We've done all that we can, exit from the algorithm.
-      if (utilities.isEmpty()) {
-        LOG.info("Unable to reschedule any tasks, exiting.");
-        break;
-      }
+      LOG.info("Continuing to check next schedule.");
     }
 
-    // Return the current 'cheapest' scheduling as the final schedule.
-    // Our scheduling plan is a list of WorkflowNodes (stages), each of which
-    // is paired to a machine. Since tasks are 'the same', in this case a
-    // WorkflowNode represents a task to be executed (WorkflowNodes are
-    // repeated).
+    // Update the actual mapping. Need to do this as the taskMapping has nodes,
+    // whose task's mapping may have been overwritten between when the optimal
+    // schedule was found and now.
+    for (WorkflowTask task : tasks) {
+      task.setMachineType(optimalScheduling.get(task));
+    }
+    LOG.info("Set workflow dag to have the best schedule.");
 
+    // Set the taskMapping and trackerMapping variables.
     taskMapping = new HashMap<String, WorkflowNode>();
 
     for (WorkflowNode node : workflowDag.getNodes()) {
@@ -237,86 +177,7 @@ public class GreedySchedulingPlan extends SchedulingPlan {
     for (String type : trackerMapping.keySet()) {
       LOG.info("Mapped machinetype " + type + " to " + trackerMapping.get(type));
     }
-
-    // TODO: Because our model assumes an unconstrained scheduling (unlimited
-    // resources), we need to convert the plan to an actual scheduling wrt/
-    // available cluster resources. (???)
-
     return true;
-  }
-
-  /**
-   * Given price information along with a stage (collection of tasks), return
-   * the two slowest tasks in the stage.
-   */
-  private WorkflowTaskPair getSlowestPair(
-      Map<TableKey, TableEntry> table, Collection<WorkflowTask> tasks) {
-
-    WorkflowTask slowestTask = null;
-    WorkflowTask secondSlowestTask = null;
-    float maxTime = 0;
-    float secondMaxTime = 0;
-
-    for (WorkflowTask task : tasks) {
-      String type = task.getMachineType();
-      TableKey key = new TableKey(task.getJobName(), type, task.isMapTask());
-      float time = table.get(key).execTime;
-      // TODO: could be nullpointer exception
-
-      if (time > maxTime) {
-        secondMaxTime = maxTime;
-        secondSlowestTask = slowestTask;
-        maxTime = time;
-        slowestTask = task;
-      } else if (time > secondMaxTime) {
-        secondMaxTime = time;
-        secondSlowestTask = task;
-      }
-    }
-
-    return new WorkflowTaskPair(slowestTask, secondSlowestTask);
-  }
-
-  /**
-   * Given price information along with machine type information and a pair of
-   * slowest tasks for a stage, return the stage's utility value.
-   */
-  private float computeUtility(Map<TableKey, TableEntry> table,
-      WorkflowTaskPair pair, Map<String, MachineType> machineType,
-      List<MachineType> sortedMachineTypes) {
-
-    // Time & Cost for slowest task on current machine.
-    TableKey slowestCurKey = new TableKey(
-        pair.slowest.getJobName(),
-        pair.slowest.getMachineType(),
-        pair.slowest.isMapTask());
-    float slowestCurTime = table.get(slowestCurKey).execTime;
-    float slowestCurCost = table.get(slowestCurKey).cost;
-
-    // Time & Cost for slowest task on next faster machine.
-    int slowestCurMachine = sortedMachineTypes.indexOf(
-        machineType.get(pair.slowest.getMachineType()));
-    String slowestNewMachine = sortedMachineTypes.get(
-        slowestCurMachine + 1).getName();
-
-    TableKey slowestNewKey = new TableKey(
-        pair.slowest.getJobName(),
-        slowestNewMachine,
-        pair.slowest.isMapTask());
-    float slowestNewTime = table.get(slowestNewKey).execTime;
-    float slowestNewCost = table.get(slowestNewKey).cost;
-
-    // Time for second-slowest task on its current machine.
-    TableKey secondSlowestCurKey = new TableKey(
-        pair.secondSlowest.getJobName(),
-        pair.secondSlowest.getMachineType(),
-        pair.secondSlowest.isMapTask());
-    float secondSlowestCurTime = table.get(secondSlowestCurKey).execTime;
-
-    // Compute and return the utility.
-    return Math.min((slowestCurTime - slowestNewTime),
-        (slowestCurTime - secondSlowestCurTime))
-        / (slowestNewCost - slowestCurCost);
   }
 
   @Override
@@ -405,7 +266,8 @@ public class GreedySchedulingPlan extends SchedulingPlan {
 
       for (WorkflowNode successor : workflowDag.getSuccessors(map.get(job))) {
         newJob = successor.getJobName();
-        LOG.info("Looking at finished job's successor " + successor.getJobName());
+        LOG.info("Looking at finished job's successor "
+            + successor.getJobName());
         for (WorkflowNode predecessor : workflowDag.getPredecessors(successor)) {
           String pre = predecessor.getJobName();
           LOG.info("Checking successor's dependency " + pre);

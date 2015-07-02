@@ -49,6 +49,7 @@ import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.SafeModeException;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
+import org.apache.hadoop.mapred.workflow.schedulers.WorkflowUtil;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -332,6 +333,7 @@ public class WorkflowClient extends Configured {
           Map<String, ResourceStatus> machines = clusterStatus.getTrackerInfo();
 
           LOG.info("Got ClusterStatus, tracker information.");
+          WorkflowUtil.printMachinesInfo(machines);
 
           // Read in the machine type information.
           // TODO: Should this file location/name be set in configuration?
@@ -341,6 +343,7 @@ public class WorkflowClient extends Configured {
           Set<MachineType> machineTypes = MachineType.parse(machineXml);
 
           LOG.info("Loaded machine types.");
+          WorkflowUtil.printMachineTypesInfo(machineTypes);
 
           // Read in Job/Machine -> Time/Price info, & construct the table.
           String timeXml = workflowJar.getParent().toString() + Path.SEPARATOR
@@ -349,6 +352,10 @@ public class WorkflowClient extends Configured {
           TimePriceTable.update(table, machineTypes);
 
           LOG.info("Loaded time-price table.");
+          WorkflowUtil.printTableInfo(table);
+
+          // TODO: Check that all jobs have an entry in the Time-Price table.
+          // TODO: Check that all machine types exist in the cluster.
 
           // Initialize/compute job information.
           updateJobInfo(workflow, workflowId);

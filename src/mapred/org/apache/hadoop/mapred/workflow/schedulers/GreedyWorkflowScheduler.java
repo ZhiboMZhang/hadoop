@@ -53,21 +53,21 @@ public class GreedyWorkflowScheduler extends TaskScheduler implements
 
   private static final Log LOG = LogFactory.getLog(GreedyWorkflowScheduler.class);
 
-  private WorkflowListener fifoWorkflowListener;
+  private WorkflowListener workflowListener;
   private EagerTaskInitializationListener eagerTaskInitializationListener;
 
   private WorkflowSchedulingProtocol workflowSchedulingProtocol;
   private SchedulingPlan schedulingPlan;
 
   public GreedyWorkflowScheduler() {
-    fifoWorkflowListener = new WorkflowListener();
+    workflowListener = new WorkflowListener();
   }
 
   @Override
   public synchronized void start() throws IOException {
     super.start();
-    taskTrackerManager.addJobInProgressListener(fifoWorkflowListener);
-    taskTrackerManager.addWorkflowInProgressListener(fifoWorkflowListener);
+    taskTrackerManager.addJobInProgressListener(workflowListener);
+    taskTrackerManager.addWorkflowInProgressListener(workflowListener);
 
     eagerTaskInitializationListener.setTaskTrackerManager(taskTrackerManager);
     eagerTaskInitializationListener.start();
@@ -76,9 +76,9 @@ public class GreedyWorkflowScheduler extends TaskScheduler implements
 
   @Override
   public synchronized void terminate() throws IOException {
-    if (fifoWorkflowListener != null) {
-      taskTrackerManager.removeJobInProgressListener(fifoWorkflowListener);
-      taskTrackerManager.removeWorkflowInProgressListener(fifoWorkflowListener);
+    if (workflowListener != null) {
+      taskTrackerManager.removeJobInProgressListener(workflowListener);
+      taskTrackerManager.removeWorkflowInProgressListener(workflowListener);
     }
     if (eagerTaskInitializationListener != null) {
       taskTrackerManager.removeJobInProgressListener(eagerTaskInitializationListener);
@@ -115,7 +115,7 @@ public class GreedyWorkflowScheduler extends TaskScheduler implements
     }
 
     // Find out what the next job/workflow to be executed is.
-    Collection<Object> queue = fifoWorkflowListener.getQueue();
+    Collection<Object> queue = workflowListener.getQueue();
     List<Task> assignedTasks = new ArrayList<Task>();
 
     synchronized (queue) {
@@ -320,7 +320,7 @@ public class GreedyWorkflowScheduler extends TaskScheduler implements
 
     // Both JobInProgress and WorkflowInProgress objects exist in the default
     // queue. Filter the queue to a Collection of JobInProgress objects.
-    Collection<Object> queue = fifoWorkflowListener.getQueue();
+    Collection<Object> queue = workflowListener.getQueue();
     Collection<JobInProgress> jobQueue = new ArrayList<JobInProgress>();
 
     for (Object object : queue) {
