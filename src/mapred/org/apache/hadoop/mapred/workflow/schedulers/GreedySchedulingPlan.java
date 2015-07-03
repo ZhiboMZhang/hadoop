@@ -200,24 +200,20 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
         WorkflowTask task = utilitiesIterator.next().slowestTask;
         LOG.info("Checking utility of task " + task + ".");
 
+        String jobName = task.getJobName();
+        boolean isMapTask = task.isMapTask();
+
+        String currMachine = task.getMachineType();
+        int currMachineIdx = sortedMachines.indexOf(machineType.get(currMachine));
+        String newMachine = sortedMachines.get(currMachineIdx + 1).getName();
+
         // Get the old and new costs to compare.
-        TableKey oldCostKey = new TableKey(
-            task.getJobName(),
-            task.getMachineType(),
-            task.isMapTask());
+        TableKey oldCostKey = new TableKey(jobName, currMachine, isMapTask);
+        TableKey newCostKey = new TableKey(jobName, newMachine, isMapTask);
         float oldCost = table.get(oldCostKey).cost;
-
-        int currMachine = sortedMachines.indexOf(
-            machineType.get(task.getMachineType()));
-        String newMachine = sortedMachines.get(currMachine + 1).getName();
-
-        TableKey newCostKey = new TableKey(
-            task.getJobName(),
-            newMachine,
-            task.isMapTask());
         float newCost = table.get(newCostKey).cost;
-
         float costDifference = (newCost - oldCost);
+
         if (remainingBudget < costDifference) {
           LOG.info("Not enough budget to reschedule task " + task + ".");
           // Don't consider rescheduling the task if it breaks the budget.
@@ -227,6 +223,7 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
           // The task with the best utility can be rescheduled.. so do it!
           task.setMachineType(newMachine);
           remainingBudget -= costDifference;
+
           // After rescheduling recalculate the critical path & utility values.
           break;
         }
