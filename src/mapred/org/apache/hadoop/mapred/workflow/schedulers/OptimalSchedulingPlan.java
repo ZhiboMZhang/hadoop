@@ -51,12 +51,15 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
 
   private WorkflowDAG workflowDag;
 
-  private Map<String, WorkflowNode> taskMapping;  // machineType / job (tasks)
+  // jobName / workflowNode (has tasks set to machine)
+  private Map<String, WorkflowNode> taskMapping;
   private Map<String, String> trackerMapping;  // trackerName -> machineType
 
   // We can assume that all tasks have the same execution time (which is given).
   // Priorities list keeps a list of WorkflowNodes.
   // (corresponding to TASKS, not stages).
+
+  // TODO: convert unconstrained (unlimited res) to constained
 
   @Override
   public boolean generatePlan(Set<MachineType> machineTypes,
@@ -184,7 +187,6 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
     }
     LOG.info("Set workflow dag to have the best schedule.");
 
-    // Set the taskMapping and trackerMapping variables.
     taskMapping = new HashMap<String, WorkflowNode>();
 
     for (WorkflowNode node : workflowDag.getNodes()) {
@@ -222,8 +224,9 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
       if (machine.equals(machineType) && name.equals(jobName)
           && type.equals(taskType)) {
         LOG.info("Found a match!");
-        // TODO: update counters, but only if scheduler actually schedules..?
-        // ...and task had to be successful.. hmm
+        // Assume task will be successful when executed.
+        tasks.remove(task);
+
         return true;
       }
     }
