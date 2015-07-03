@@ -176,8 +176,8 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
         LOG.info("Got slowest pair for map & reduce stages.");
 
         // Check if faster machine actually exists
-        int mapSlowestIdx = sortedMachines.indexOf(machineType.get(mapPair.slowest));
-        int redSlowestIdx = sortedMachines.indexOf(machineType.get(redPair.slowest));
+        int mapSlowestIdx = sortedMachines.indexOf(machineType.get(mapPair.slowest.getMachineType()));
+        int redSlowestIdx = sortedMachines.indexOf(machineType.get(redPair.slowest.getMachineType()));
         LOG.info("Got slowest task index to check rescheduling ability.");
 
         // Only consider a task for rescheduling if it can be rescheduled.
@@ -306,10 +306,8 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     float slowestCurCost = table.get(slowestCurKey).cost;
 
     // Time & Cost for slowest task on next faster machine.
-    int slowestCurMachine = sortedMachineTypes.indexOf(
-        machineType.get(pair.slowest.getMachineType()));
-    String slowestNewMachine = sortedMachineTypes.get(
-        slowestCurMachine + 1).getName();
+    int slowestCurMachine = sortedMachineTypes.indexOf(machineType.get(pair.slowest.getMachineType()));
+    String slowestNewMachine = sortedMachineTypes.get(slowestCurMachine + 1).getName();
 
     TableKey slowestNewKey = new TableKey(
         pair.slowest.getJobName(),
@@ -367,7 +365,8 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     return false;
   }
 
-  Set<String> prevFinishedJobs = new HashSet<String>();
+  Collection<String> prevFinishedJobs = new HashSet<String>();
+  Collection<String> prevExecutableJobs = new HashSet<String>();
 
   @Override
   // TODO: what if first call finishedJobs isn't null --> error checking
@@ -387,19 +386,19 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     // We've previously sent some executable jobs. If the set of finished jobs
     // is the same as we previously sent, then nothing needs to be done.
     // Otherwise, the new finished jobs determine the next executable jobs.
-    Set<String> finishedJobsSet = new HashSet<String>(finishedJobs);
     if (finishedJobs.size() == workflowDag.getNodes().size()) {
       LOG.info("All jobs are finished, returning the empty set.");
       executableJobs.clear();
       return executableJobs;
-    } else if (prevFinishedJobs.equals(finishedJobsSet)) {
+    } else if (prevFinishedJobs.equals(new HashSet<String>(finishedJobs))) {
       LOG.info("Set of finished jobs is the same as before (no progress made).");
-      return prevFinishedJobs;
+      return prevExecutableJobs;
     } else {
       // Modify finishedJobs so that we only consider newly finished jobs.
+      // And add the new finished jobs to our previously finished jobs.
       LOG.info("Got new finished jobs.");
       finishedJobs.removeAll(prevFinishedJobs);
-      prevFinishedJobs = finishedJobsSet;
+      prevFinishedJobs.addAll(finishedJobs);
     }
 
     // TODO: better
@@ -436,6 +435,7 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
       }
     }
 
+    prevExecutableJobs = executableJobs;
     return executableJobs;
   }
 
@@ -472,6 +472,12 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     for (int i = 0; i < numFinishedJobs; i++) {
       prevFinishedJobs.add(Text.readString(in));
     }
+
+    prevExecutableJobs = new HashSet<String>();
+    int numExecutableJobs = in.readInt();
+    for (int i = 0; i < numExecutableJobs; i++) {
+      prevExecutableJobs.add(Text.readString(in));
+    }
   }
 
   @Override
@@ -493,6 +499,11 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
 
     out.writeInt(prevFinishedJobs.size());
     for (String job : prevFinishedJobs) {
+      Text.writeString(out, job);
+    }
+
+    out.writeInt(prevExecutableJobs.size());
+    for (String job : prevExecutableJobs) {
       Text.writeString(out, job);
     }
   }

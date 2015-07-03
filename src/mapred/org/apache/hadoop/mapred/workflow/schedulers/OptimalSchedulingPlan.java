@@ -233,7 +233,8 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
     return false;
   }
 
-  Set<String> prevFinishedJobs = new HashSet<String>();
+  Collection<String> prevFinishedJobs = new HashSet<String>();
+  Collection<String> prevExecutableJobs = new HashSet<String>();
 
   @Override
   // TODO: what if first call finishedJobs isn't null --> error checking
@@ -253,19 +254,19 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
     // We've previously sent some executable jobs. If the set of finished jobs
     // is the same as we previously sent, then nothing needs to be done.
     // Otherwise, the new finished jobs determine the next executable jobs.
-    Set<String> finishedJobsSet = new HashSet<String>(finishedJobs);
     if (finishedJobs.size() == workflowDag.getNodes().size()) {
       LOG.info("All jobs are finished, returning the empty set.");
       executableJobs.clear();
       return executableJobs;
-    } else if (prevFinishedJobs.equals(finishedJobsSet)) {
+    } else if (prevFinishedJobs.equals(new HashSet<String>(finishedJobs))) {
       LOG.info("Set of finished jobs is the same as before (no progress made).");
-      return prevFinishedJobs;
+      return prevExecutableJobs;
     } else {
       // Modify finishedJobs so that we only consider newly finished jobs.
+      // And add the new finished jobs to our previously finished jobs.
       LOG.info("Got new finished jobs.");
       finishedJobs.removeAll(prevFinishedJobs);
-      prevFinishedJobs = finishedJobsSet;
+      prevFinishedJobs.addAll(finishedJobs);
     }
 
     // TODO: better
@@ -303,6 +304,7 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
       }
     }
 
+    prevExecutableJobs = executableJobs;
     return executableJobs;
   }
 
@@ -339,6 +341,12 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
     for (int i = 0; i < numFinishedJobs; i++) {
       prevFinishedJobs.add(Text.readString(in));
     }
+
+    prevExecutableJobs = new HashSet<String>();
+    int numExecutableJobs = in.readInt();
+    for (int i = 0; i < numExecutableJobs; i++) {
+      prevExecutableJobs.add(Text.readString(in));
+    }
   }
 
   @Override
@@ -360,6 +368,11 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
 
     out.writeInt(prevFinishedJobs.size());
     for (String job : prevFinishedJobs) {
+      Text.writeString(out, job);
+    }
+
+    out.writeInt(prevExecutableJobs.size());
+    for (String job : prevExecutableJobs) {
       Text.writeString(out, job);
     }
   }

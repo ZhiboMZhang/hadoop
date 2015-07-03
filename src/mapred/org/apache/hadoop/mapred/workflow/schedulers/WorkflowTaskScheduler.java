@@ -190,9 +190,9 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           LOG.info("Got workflow from queue.");
 
           Collection<String> finishedJobs = workflow.getStatus().getFinishedJobs();
+          LOG.info("Passed in finished jobs: " + finishedJobs);
           Collection<String> jobNames = schedulingPlan.getExecutableJobs(finishedJobs);
 
-          LOG.info("Passed in finished jobs: " + finishedJobs);
           LOG.info("Got back executable jobs: " + jobNames);
 
           if (jobNames == null || jobNames.size() == 0) {
