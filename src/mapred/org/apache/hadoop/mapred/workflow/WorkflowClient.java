@@ -354,9 +354,6 @@ public class WorkflowClient extends Configured {
           LOG.info("Loaded time-price table.");
           TimePriceTable.print(table);
 
-          // TODO: Check that all jobs have an entry in the Time-Price table.
-          // -> what if scheduler doesn't use them?
-
           // Initialize/compute job information.
           updateJobInfo(workflow, workflowId);
           updateJobIoPaths(workflow);

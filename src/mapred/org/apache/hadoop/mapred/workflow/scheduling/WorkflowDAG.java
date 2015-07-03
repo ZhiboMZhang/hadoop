@@ -16,10 +16,9 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.MachineType;
-import org.apache.hadoop.mapred.workflow.TimePriceTable;
-import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableKey;
+import org.apache.hadoop.mapred.workflow.WorkflowConf;
 
 /**
  * Class representing a workflow directed acyclic graph.
