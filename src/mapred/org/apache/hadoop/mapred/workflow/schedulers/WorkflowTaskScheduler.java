@@ -131,10 +131,8 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           JobInProgress job = (JobInProgress) object;
           LOG.info("Got job from queue.");
 
-          if (job.getStatus().getRunState() != JobStatus.RUNNING) {
-            LOG.info("Job is not in running state, continuing.");
-            continue;
-          }
+          if (job.getStatus().getRunState() != JobStatus.RUNNING) { continue; }
+          LOG.info("Job is in running state.");
 
           // A mapping between available machines (names) and machine types.
           Map<String, String> trackerMap = schedulingPlan.getTrackerMapping();
@@ -145,67 +143,45 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           String machineType = trackerMap.get(tracker);
           LOG.info("Got tracker: " + tracker + ", machineType: " + machineType);
 
-          // Match the job with an available task.
-          // -If a running job exists for machine type, run next job/task on it.
-          // -It is up to the schedulingPlan to decide what to do if there
-          // doesn't exist any machines of the required type.
+          // Get cluster status information to see if there are free slots.
+          ClusterStatus clusterStatus = taskTrackerManager.getClusterStatus();
+          TaskTrackerStatus tts = taskTracker.getStatus();
+          final int clusterSize = clusterStatus.getTaskTrackers();
+          final int uniqueHosts = taskTrackerManager.getNumberOfUniqueHosts();
+          LOG.info("Got cluster status info to compute tracker capacity.");
+
           String jobName = job.getJobConf().getJobName();
-          boolean runMap = schedulingPlan.matchMap(machineType, jobName);
-          boolean runReduce = schedulingPlan.matchReduce(machineType, jobName);
-          LOG.info("Job " + jobName + " is running:" + (runMap ? " map " : "")
-              + (runReduce ? " reduce " : "") + "tasks.");
 
-          // Run a task from the job on the given tracker.
-          if (runMap || runReduce) {
+          LOG.info("Checking if a map task can be run.");
+          // Check if any slots are available on the tracker.
+          final int mapCapacity = tts.getMaxMapSlots();
+          final int runningMaps = tts.countMapTasks();
+          final int availableMapSlots = mapCapacity - runningMaps;
 
-            Task task;
-            ClusterStatus clusterStatus = taskTrackerManager.getClusterStatus();
-            TaskTrackerStatus tts = taskTracker.getStatus();
-            final int clusterSize = clusterStatus.getTaskTrackers();
-            final int uniqueHosts = taskTrackerManager.getNumberOfUniqueHosts();
-            LOG.info("Got cluster status info to compute tracker capacity.");
-
-            if (runMap) {
-              LOG.info("Checking if a map task can be run.");
-              // Check if any slots are available on the tracker.
-              final int mapCapacity = tts.getMaxMapSlots();
-              final int runningMaps = tts.countMapTasks();
-              final int availableMapSlots = mapCapacity - runningMaps;
-
-              // Attempt to assign map tasks.
-              // TODO: all or just one?
-              for (int i = 0; i < availableMapSlots; i++) {
-                task = job.obtainNewMapTask(tts, clusterSize, uniqueHosts);
-
-                if (task != null) {
-                  assignedTasks.add(task);
-                  LOG.info("Assigning map task " + task.toString() + ".");
-                  // TODO: update schedulingPlan that task was run
-                }
-              }
+          // TODO: what happens if task isn't null but sched. returns false?
+          // If schedulingPlan.match() is true then we HAVE to schedule.
+          if (availableMapSlots > 0) {
+            Task task = job.obtainNewNodeLocalMapTask(tts, clusterSize, uniqueHosts);
+            if (task != null && schedulingPlan.matchMap(machineType, jobName)) {
+              assignedTasks.add(task);
+              LOG.info("Assigning map task " + task.toString() + ".");
             }
+          }
 
-            // Don't run a reduce task if there aren't supposed to be any
-            // TODO
-            if (runReduce) {
-              LOG.info("Checking if a reduce task can be run.");
-              // Check if any slots are available on the tracker.
-              final int reduceCapacity = tts.getMaxReduceSlots();
-              final int runningReduces = tts.countReduceTasks();
-              final int availableReduceSlots = reduceCapacity - runningReduces;
+          LOG.info("Checking if a reduce task can be run.");
+          // Check if any slots are available on the tracker.
+          final int reduceCapacity = tts.getMaxReduceSlots();
+          final int runningReduces = tts.countReduceTasks();
+          final int availableReduceSlots = reduceCapacity - runningReduces;
 
-              // Attempt to assign reduce tasks.
-              for (int i = 0; i < availableReduceSlots; i++) {
-                task = job.obtainNewReduceTask(tts, clusterSize, uniqueHosts);
-
-                if (task != null) {
-                  assignedTasks.add(task);
-                  LOG.info("Assigning reduce task " + task.toString() + ".");
-                  // TODO: update schedulingPlan that task was run
-                }
-              }
+          // TODO: what happens if task isn't null but sched. returns false?
+          // If schedulingPlan.match() is true then we HAVE to schedule.
+          if (availableReduceSlots > 0) {
+            Task task = job.obtainNewReduceTask(tts, clusterSize, uniqueHosts);
+            if (task != null && schedulingPlan.matchReduce(machineType, jobName)) {
+              assignedTasks.add(task);
+              LOG.info("Assigning reduce task " + task.toString() + ".");
             }
-
           }
 
         } else if (object instanceof WorkflowInProgress) {
