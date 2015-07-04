@@ -96,15 +96,16 @@ public class WorkflowTask implements Writable {
   @Override
   public void readFields(DataInput in) throws IOException {
     job = Text.readString(in);
-    machineType = Text.readString(in);
     isMapTask = in.readBoolean();
+    machineType = in.readBoolean() ? Text.readString(in) : null;
   }
 
   @Override
   public void write(DataOutput out) throws IOException {
     Text.writeString(out, job);
-    Text.writeString(out, machineType);
     out.writeBoolean(isMapTask);
+    out.writeBoolean(machineType != null);
+    if (machineType != null) { Text.writeString(out, machineType); }
   }
 
 }
