@@ -31,6 +31,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.ResourceStatus;
 import org.apache.hadoop.mapred.workflow.TimePriceTable.TableEntry;
@@ -201,6 +202,23 @@ public class WorkflowConf extends Configuration implements Writable {
           + ". Job does not exist.");
     }
     job.setMainClass(mainClass);
+  }
+
+  /**
+   * Set custom input paths for an entry job.
+   *
+   * @param name The name of the workflow job.
+   * @param commaSeparatedPaths A comma-separated list of absolute paths,
+   *          assumed to existing in HDFS.
+   */
+  public void setJobInputPaths(String name, String commaSeparatedPaths)
+      throws IOException {
+    JobConf job = jobs.get(name);
+    if (null == job) {
+      throw new IOException("Cannot add main class to job " + name
+          + ". Job does not exist.");
+    }
+    FileInputFormat.setInputPaths(job, commaSeparatedPaths);
   }
 
   /**

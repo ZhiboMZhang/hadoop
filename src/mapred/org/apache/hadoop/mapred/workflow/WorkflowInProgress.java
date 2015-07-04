@@ -72,7 +72,6 @@ public class WorkflowInProgress {
 
       CleanupQueue queue = CleanupQueue.getInstance();
 
-      String workflowInput = workflowConf.get("mapred.input.dir");
       String workflowOutput = workflowConf.get("mapred.output.dir");
 
       // Remove the temporary directories created in HDFS.
@@ -80,10 +79,13 @@ public class WorkflowInProgress {
       // Some may be repeated, so add all paths to a set before deletion.
       Set<String> ioDirs = new HashSet<String>();
       for (JobConf conf : workflowConf.getJobs().values()) {
-        String input = conf.getInputDir();
         String output = conf.getOutputDir();
         if (!output.equals(workflowOutput)) { ioDirs.add(output); }
-        if (!input.equals(workflowInput)) { ioDirs.add(input); }
+
+        // An entry job doesn't have to have the workflowInput as its input.
+        if (workflowConf.getDependencies().get(conf.getJobName()) != null) {
+          ioDirs.add(conf.getInputDir());
+        }
       }
       for (String dir : ioDirs) {
         queue.addToQueue(new PathDeletionContext(new Path(dir), workflowConf));

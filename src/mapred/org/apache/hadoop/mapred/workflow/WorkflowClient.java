@@ -475,7 +475,7 @@ public class WorkflowClient extends Configured {
     LOG.info("Read workflowInputDir as: " + workflowInput);
     LOG.info("Read workflowOutputDir as: " + workflowOutput);
 
-    // Set input and output directories for all jobs.
+    // Set output directories for all jobs.
     for (JobConf conf : jobs.values()) {
       String jobName = conf.getJobName();
       String output = Path.SEPARATOR + workflow.getWorkflowName() + "_" + jobName;
@@ -510,10 +510,15 @@ public class WorkflowClient extends Configured {
 
       // Jobs with no dependencies are entry jobs.
       if (dependencies.get(job) == null) {
-        jobConf.setInputDir(workflowInput);
-
-        LOG.info("Set input of " + job + " (now: "
-            + jobConf.get("mapred.input.dir") + ") to be " + workflowInput);
+        // Only set the input directory if one was not provided.
+        if (jobConf.getInputDir() == null) {
+          jobConf.setInputDir(workflowInput);
+          LOG.info("Set input of " + job + " (now: " + jobConf.getInputDir()
+              + ") to be " + workflowInput);
+        } else {
+          LOG.info("Input of " + jobConf.getJobName() + " was already set to "
+              + jobConf.getInputDir() + ".");
+        }
       }
 
       // Jobs that aren't dependencies for any other jobs are exit jobs.
