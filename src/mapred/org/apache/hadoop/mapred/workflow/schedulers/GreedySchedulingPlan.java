@@ -409,26 +409,23 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     for (String job : finishedJobs) {
 
       LOG.info("Checking to add successors of job " + job + ".");
-      String newJob = null;
-      boolean predecessorsFinished = true;
 
       for (WorkflowNode successor : workflowDag.getSuccessors(map.get(job))) {
-        newJob = successor.getJobName();
-        LOG.info("Looking at finished job's successor " + successor.getJobName());
+        LOG.info("Checking eligibility of successor " + successor.getJobName() + ".");
+        boolean eligible = true;
+
         for (WorkflowNode predecessor : workflowDag.getPredecessors(successor)) {
-          String pre = predecessor.getJobName();
-          LOG.info("Checking successor's dependency " + pre);
-          if (!finishedJobs.contains(pre) && !prevFinishedJobs.contains(pre)) {
-            LOG.info("The job " + pre + " isn't finished.");
-            predecessorsFinished = false;
-          } else {
-            LOG.info("The job " + pre + " is finished.");
+          LOG.info("Checking if predecessor " + predecessor.getJobName() + " is finished.");
+          String predecessorName = predecessor.getJobName();
+          if (!finishedJobs.contains(predecessorName)
+              && !prevFinishedJobs.contains(predecessorName)) {
+            eligible = false;
           }
         }
-      }
-      if (predecessorsFinished && newJob != null) {
-        LOG.info("Job " + newJob + " can be executed, adding it.");
-        executableJobs.add(newJob);
+        if (eligible) {
+          LOG.info("Adding " + successor.getJobName() + " to list of executable jobs.");
+          executableJobs.add(successor.getJobName());
+        }
       }
     }
 
