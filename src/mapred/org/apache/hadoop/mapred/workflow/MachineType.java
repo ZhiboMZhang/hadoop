@@ -199,4 +199,8 @@ public class MachineType {
     return machineTypes;
   }
 
+  public String toString() {
+    return name;
+  }
+
 }

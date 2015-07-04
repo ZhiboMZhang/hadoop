@@ -20,6 +20,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -142,8 +143,7 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
 
     // Pair up a permutation to the task list.
     float minTime = Float.MAX_VALUE;
-    Map<WorkflowTask, String> optimalScheduling =
-        new HashMap<WorkflowTask, String>();
+    Map<WorkflowTask, String> optimalScheduling = new HashMap<WorkflowTask, String>();
 
     for (List<MachineType> permutation : permutations) {
 
@@ -151,6 +151,7 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
         tasks.get(i).setMachineType(permutation.get(i).getName());
       }
       LOG.info("Set " + permutations.indexOf(permutation) + "th permutation.");
+      LOG.info("Permutation is: " + Arrays.toString(permutation.toArray(new MachineType[0])));
 
       // Calculate the cost and time.
       // Time is in seconds, Cost is in $$. (see {@link TableEntry})
@@ -179,7 +180,7 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
       LOG.info("Continuing to check next schedule.");
     }
 
-    // Update the actual mapping. Need to do this as the taskMapping has nodes,
+    // Update the actual mapping. Need to do this as the taskMapping has nodes
     // whose task's mapping may have been overwritten between when the optimal
     // schedule was found and now.
     for (WorkflowTask task : tasks) {

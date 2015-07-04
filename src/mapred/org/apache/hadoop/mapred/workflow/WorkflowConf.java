@@ -60,7 +60,7 @@ public class WorkflowConf extends Configuration implements Writable {
 
   public static final Log LOG = LogFactory.getLog(WorkflowConf.class);
   public static final String SCHEDULING_PLAN_PROPERTY_NAME =
-      "mapred.workflow.scheduler";
+      "mapred.workflow.schedulingPlan";
 
   private WorkflowSchedulingPlan schedulingPlan;
   private Map<String, JobConf> jobs;

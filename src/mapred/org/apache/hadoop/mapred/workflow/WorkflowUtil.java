@@ -109,13 +109,16 @@ public class WorkflowUtil {
     List<List<T>> permutations = new ArrayList<List<T>>();
 
     if (size == 1) {
-      permutations.add(new ArrayList<T>(types));
+      for (T type : types) {
+        List<T> newPermutation = new ArrayList<T>();
+        newPermutation.add(type);
+        permutations.add(newPermutation);
+      }
     } else {
       for (List<T> permutation : getPermutations(types, size - 1)) {
         for (T type : types) {
           List<T> newPermutation = new ArrayList<T>(permutation);
           newPermutation.add(type);
-
           permutations.add(newPermutation);
         }
       }
