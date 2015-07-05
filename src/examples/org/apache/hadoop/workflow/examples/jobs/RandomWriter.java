@@ -171,7 +171,7 @@ public class RandomWriter extends Configured implements Tool {
     /**
      * Given an output filename, write a bunch of random records to it.
      */
-    public void map(WritableComparable key, 
+    public void map(WritableComparable key,
                     Writable value,
                     OutputCollector<BytesWritable, BytesWritable> output, 
                     Reporter reporter) throws IOException {
@@ -223,13 +223,13 @@ public class RandomWriter extends Configured implements Tool {
    * @throws IOException 
    */
   public int run(String[] args) throws Exception {    
-    if (args.length == 0) {
-      System.out.println("Usage: writer <out-dir>");
+    if (args.length != 2) {
+      System.out.println("Usage: writer <ignored (in-dir)> <out-dir>");
       ToolRunner.printGenericCommandUsage(System.out);
       return -1;
     }
     
-    Path outDir = new Path(args[0]);
+    Path outDir = new Path(args[1]);
     JobConf job = new JobConf(getConf());
     
     job.setJarByClass(RandomWriter.class);
@@ -280,8 +280,7 @@ public class RandomWriter extends Configured implements Tool {
   }
   
   public static void main(String[] args) throws Exception {
-    int res = ToolRunner.run(new Configuration(), new RandomWriter(), args);
-    System.exit(res);
+    ToolRunner.run(new Configuration(), new RandomWriter(), args);
   }
 
 }

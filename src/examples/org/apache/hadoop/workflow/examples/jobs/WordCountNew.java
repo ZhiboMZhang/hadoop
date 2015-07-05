@@ -70,7 +70,7 @@ public class WordCountNew {
       System.err.println("Usage: wordcount <in> <out>");
       System.exit(2);
     }
-    Job job = new Job(conf, "word count");
+    Job job = new Job(conf, "word-count");
     job.setJarByClass(WordCountNew.class);
     job.setMapperClass(TokenizerMapper.class);
     job.setCombinerClass(IntSumReducer.class);
@@ -79,6 +79,6 @@ public class WordCountNew {
     job.setOutputValueClass(IntWritable.class);
     FileInputFormat.addInputPath(job, new Path(otherArgs[0]));
     FileOutputFormat.setOutputPath(job, new Path(otherArgs[1]));
-    System.exit(job.waitForCompletion(true) ? 0 : 1);
+    job.waitForCompletion(true);
   }
 }
