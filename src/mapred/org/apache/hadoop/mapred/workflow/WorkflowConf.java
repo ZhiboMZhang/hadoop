@@ -19,6 +19,7 @@ package org.apache.hadoop.mapred.workflow;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -234,6 +235,21 @@ public class WorkflowConf extends Configuration implements Writable {
       this.dependencies.put(job, dependencies);
     }
     dependencies.add(dependency);
+  }
+
+  /**
+   * Add a list of dependencies to a job.
+   *
+   * @param job A unique job name.
+   * @param dependencies A collection of unique job names.
+   */
+  public void addDependencies(String job, Collection<String> dependencies) {
+    Set<String> deps = this.dependencies.get(job);
+    if (deps == null) {
+      deps = new HashSet<String>();
+      this.dependencies.put(job, deps);
+    }
+    deps.addAll(dependencies);
   }
 
   /**
