@@ -16,35 +16,37 @@
  */
 package org.apache.hadoop.workflow.examples;
 
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.FileInputFormat;
-import org.apache.hadoop.mapred.FileOutputFormat;
 import org.apache.hadoop.mapred.workflow.WorkflowClient;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
 
-public class WordCount {
+public class RandomWordCount {
 
   public static void main(String[] args) throws Exception {
 
-    WorkflowConf workflowConf = new WorkflowConf(WordCount.class);
-    workflowConf.setWorkflowName("WordCount-Trivial");
+    WorkflowConf conf = new WorkflowConf(RandomWordCount.class);
+    conf.setWorkflowName("RandomWordCount");
 
     // Set any constraints.
-    // Budget takes a dollar amount parsed as a double value.
-    // Deadline takes a time amount in any of (whole) seconds (s), minutes (m),
-    // hours (h). With no type flag the assumed type is seconds.
-    workflowConf.setConstraint(Constraints.BUDGET, "100.49");
-    workflowConf.setConstraint(Constraints.DEADLINE, "600s");
+    // Budget takes an amount in dollars.
+    // Deadline takes a time in any of seconds [s], minutes (m), or hours (h).
+    conf.setConstraint(Constraints.BUDGET, "1.52");
+    conf.setConstraint(Constraints.DEADLINE, "30");
 
-    // Specify jobs in the workflow.
-    workflowConf.addJob("WordCountOld", "wordcountold.jar");
-    workflowConf.setJobMainClass("WordCountOld", "org.apache.hadoop.examples.WordCountOld");
+    // Specify the jobs that comprise the workflow.
+    // Entries for these jobs must appear in the time-price table xml file.
+    conf.addJob("wordwrite", "randomtextwriter.jar");
+    conf.addJob("wordcount", "wordcountold.jar");
 
-    // Also specify the input dataset.
-    FileInputFormat.setInputPaths(workflowConf, new Path(args[0]));
-    FileOutputFormat.setOutputPath(workflowConf, new Path(args[1]));
+    // Specify dependencies.
 
-    WorkflowClient.runWorkflow(workflowConf);
+    // Specify main classes (assuming not in jar files).
+
+    // Specify command-line parameters if required.
+
+    // Specify input paths.
+
+    // Lastly, run the workflow.
+    WorkflowClient.runWorkflow(conf);
   }
 }

@@ -12,7 +12,7 @@
  * the License.
  */
 
-package org.apache.hadoop.examples;
+package org.apache.hadoop.workflow.examples.jobs;
 
 import java.io.IOException;
 import java.util.Iterator;
