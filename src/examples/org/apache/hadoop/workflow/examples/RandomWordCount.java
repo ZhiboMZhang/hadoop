@@ -30,21 +30,26 @@ public class RandomWordCount {
     // Set any constraints.
     // Budget takes an amount in dollars.
     // Deadline takes a time in any of seconds [s], minutes (m), or hours (h).
-    conf.setConstraint(Constraints.BUDGET, "1.52");
-    conf.setConstraint(Constraints.DEADLINE, "30");
+    conf.setConstraint(Constraints.BUDGET, "3.52");
+    conf.setConstraint(Constraints.DEADLINE, "60");
 
     // Specify the jobs that comprise the workflow.
     // Entries for these jobs must appear in the time-price table xml file.
-    conf.addJob("wordwrite", "randomtextwriter.jar");
-    conf.addJob("wordcount", "wordcountold.jar");
-
-    // Specify dependencies.
+    conf.addJob("RandomWriter", "randomtextwriter.jar");
+    conf.addJob("WordCountNew", "wordcountnew.jar");
 
     // Specify main classes (assuming not in jar files).
+    conf.setJobMainClass("WordCountNew", "org.apache.hadoop.workflow.examples.jobs.WordCountNew");
+    conf.setJobMainClass("RandomWriter", "org.apache.hadoop.workflow.examples.jobs.RandomTextWriter");
+
+    // Specify dependencies.
+    conf.addDependency("WordCountNew", "RandomWriter");
 
     // Specify command-line parameters if required.
+    // -> None are.
 
-    // Specify input paths.
+    // Specify optional/additional input paths.
+    // -> Not needed.
 
     // Lastly, run the workflow.
     WorkflowClient.runWorkflow(conf);
