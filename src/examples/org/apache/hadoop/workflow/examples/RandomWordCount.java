@@ -16,6 +16,9 @@
  */
 package org.apache.hadoop.workflow.examples;
 
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.FileOutputFormat;
 import org.apache.hadoop.mapred.workflow.WorkflowClient;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
@@ -50,6 +53,10 @@ public class RandomWordCount {
 
     // Specify optional/additional input paths.
     // -> Not needed.
+
+    // Set input and output paths for the workflow.
+    FileInputFormat.setInputPaths(conf, new Path(args[0]));
+    FileOutputFormat.setOutputPath(conf, new Path(args[1]));
 
     // Lastly, run the workflow.
     WorkflowClient.runWorkflow(conf);
