@@ -203,14 +203,11 @@ public class RandomWriter extends Configured implements Tool {
      */
     @Override
     public void configure(JobConf job) {
-      numBytesToWrite = job.getLong("test.randomwrite.bytes_per_map",
-                                    1*1024*1024*1024);
-      minKeySize = job.getInt("test.randomwrite.min_key", 10);
-      keySizeRange = 
-        job.getInt("test.randomwrite.max_key", 1000) - minKeySize;
+      numBytesToWrite = job.getLong("test.randomwrite.bytes_per_map", 1*1024*1024);
+      minKeySize = job.getInt("test.randomwrite.min_key", 2);
+      keySizeRange = job.getInt("test.randomwrite.max_key", 50) - minKeySize;
       minValueSize = job.getInt("test.randomwrite.min_value", 0);
-      valueSizeRange = 
-        job.getInt("test.randomwrite.max_value", 20000) - minValueSize;
+      valueSizeRange = job.getInt("test.randomwrite.max_value", 100) - minValueSize;
     }
     
   }
@@ -246,9 +243,8 @@ public class RandomWriter extends Configured implements Tool {
     
     JobClient client = new JobClient(job);
     ClusterStatus cluster = client.getClusterStatus();
-    int numMapsPerHost = job.getInt("test.randomwriter.maps_per_host", 10);
-    long numBytesToWritePerMap = job.getLong("test.randomwrite.bytes_per_map",
-                                             1*1024*1024*1024);
+    int numMapsPerHost = job.getInt("test.randomwriter.maps_per_host", 4);
+    long numBytesToWritePerMap = job.getLong("test.randomwrite.bytes_per_map", 1*1024*1024);
     if (numBytesToWritePerMap == 0) {
       System.err.println("Cannot have test.randomwrite.bytes_per_map set to 0");
       return -2;

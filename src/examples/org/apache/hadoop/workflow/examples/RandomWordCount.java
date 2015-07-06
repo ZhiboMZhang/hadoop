@@ -34,12 +34,20 @@ public class RandomWordCount {
     // Budget takes an amount in dollars.
     // Deadline takes a time in any of seconds [s], minutes (m), or hours (h).
     conf.setConstraint(Constraints.BUDGET, "3.52");
-    conf.setConstraint(Constraints.DEADLINE, "60");
+    conf.setConstraint(Constraints.DEADLINE, "600");
 
     // Specify the jobs that comprise the workflow.
     // Entries for these jobs must appear in the time-price table xml file.
     conf.addJob("RandomWriter", "randomtextwriter.jar");
     conf.addJob("WordCountNew", "wordcountnew.jar");
+
+    // TODO: any way I can compute / know from jobs run?
+    // TODO: however I'm already assuming that this is known.
+    conf.getJobs().get("RandomWriter").setNumMapTasks(8);
+    conf.getJobs().get("RandomWriter").setNumReduceTasks(0);
+
+    conf.getJobs().get("WordCountNew").setNumMapTasks(8);
+    conf.getJobs().get("WordCountNew").setNumReduceTasks(1);
 
     // Specify main classes (assuming not in jar files).
     conf.setJobMainClass("WordCountNew", "org.apache.hadoop.workflow.examples.jobs.WordCountNew");

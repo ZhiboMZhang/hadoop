@@ -129,14 +129,11 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           // must have been added by the workflowInPorgress object in the queue.
 
           JobInProgress job = (JobInProgress) object;
-          LOG.info("Got job from queue.");
-
           if (job.getStatus().getRunState() != JobStatus.RUNNING) { continue; }
-          LOG.info("Job is in running state.");
+          LOG.info("Got job from queue.");
 
           // A mapping between available machines (names) and machine types.
           Map<String, String> trackerMap = schedulingPlan.getTrackerMapping();
-          LOG.info("Got tracker mapping.");
 
           // Find out which tasktracker wants a task, and it's machine type.
           String tracker = taskTracker.getTrackerName();
@@ -148,7 +145,6 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           TaskTrackerStatus tts = taskTracker.getStatus();
           final int clusterSize = clusterStatus.getTaskTrackers();
           final int uniqueHosts = taskTrackerManager.getNumberOfUniqueHosts();
-          LOG.info("Got cluster status info to compute tracker capacity.");
 
           String jobName = job.getJobConf().getJobName();
 
@@ -161,7 +157,7 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           // TODO: what happens if task isn't null but sched. returns false?
           // If schedulingPlan.match() is true then we HAVE to schedule.
           if (availableMapSlots > 0) {
-            Task task = job.obtainNewNodeLocalMapTask(tts, clusterSize, uniqueHosts);
+            Task task = job.obtainNewMapTask(tts, clusterSize, uniqueHosts);
             if (task != null && schedulingPlan.matchMap(machineType, jobName)) {
               assignedTasks.add(task);
               LOG.info("Assigning map task " + task.toString() + ".");

@@ -170,28 +170,34 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
       for (WorkflowNode node : criticalPath) {
         LOG.info("Checking stages of node " + node.getJobName() + " on critical path.");
 
-        // Find the slowest and second-slowests tasks in each stage.
-        WorkflowTaskPair mapPair = getSlowestPair(table, node.getMapTasks());
-        WorkflowTaskPair redPair = getSlowestPair(table, node.getReduceTasks());
-        LOG.info("Got slowest pair for map & reduce stages.");
+        LOG.info("Getting the slowest pair of tasks for the map stage.");
+        if (!node.getMapTasks().isEmpty()) {
+          WorkflowTaskPair pair = getSlowestPair(table, node.getMapTasks());
 
-        // Check if faster machine actually exists
-        int mapSlowestIdx = sortedMachines.indexOf(machineType.get(mapPair.slowest.getMachineType()));
-        int redSlowestIdx = sortedMachines.indexOf(machineType.get(redPair.slowest.getMachineType()));
-        LOG.info("Got slowest task index to check rescheduling ability.");
+          // Check if faster machine actually exists
+          int slowestIdx = sortedMachines.indexOf(
+              machineType.get(pair.slowest.getMachineType()));
 
-        // Only consider a task for rescheduling if it can be rescheduled.
-        if (mapSlowestIdx < (sortedMachines.size() - 1)) {
-          // Compute the utility for each pair.
-          float mapUtility = computeUtility(table, mapPair, machineType, sortedMachines);
-          utilities.add(new Utility(mapPair.slowest, mapUtility));
-          LOG.info("Can reschedule map task.");
+          if (slowestIdx < (sortedMachines.size() - 1)) {
+            // Compute the utility for the pair.
+            float utility = computeUtility(table, pair, machineType, sortedMachines);
+            utilities.add(new Utility(pair.slowest, utility));
+            LOG.info("Can reschedule map task.");
+          }
         }
 
-        if (redSlowestIdx < (sortedMachines.size() - 1)) {
-          float redUtility = computeUtility(table, redPair, machineType, sortedMachines);
-          utilities.add(new Utility(redPair.slowest, redUtility));
-          LOG.info("Can reschedule reduce task.");
+        LOG.info("Getting the slowest pair of tasks for the reduce stage.");
+        if (!node.getReduceTasks().isEmpty()) {
+          WorkflowTaskPair pair = getSlowestPair(table, node.getReduceTasks());
+
+          int slowestIdx = sortedMachines.indexOf(
+              machineType.get(pair.slowest.getMachineType()));
+
+          if (slowestIdx < (sortedMachines.size() - 1)) {
+            float utility = computeUtility(table, pair, machineType, sortedMachines);
+            utilities.add(new Utility(pair.slowest, utility));
+            LOG.info("Can reschedule reduce task.");
+          }
         }
       }
 
@@ -369,7 +375,6 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
   // TODO: what if first call finishedJobs isn't null --> error checking
   public Collection<String> getExecutableJobs(Collection<String> finishedJobs) {
 
-    LOG.info("In getExecutableJobs.");
     Set<String> executableJobs = new HashSet<String>();
 
     // If there are no finished jobs then return the entry nodes.
@@ -377,6 +382,7 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
       for (WorkflowNode node : workflowDag.getEntryNodes()) {
         executableJobs.add(node.getJobName());
       }
+      LOG.info("No jobs finished, returning the set of entry jobs.");
       return executableJobs;
     }
 

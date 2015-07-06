@@ -77,7 +77,7 @@ import org.apache.hadoop.util.ToolRunner;
  * and ones supported by {@link Tool} via the command-line.
  * 
  * To run: bin/hadoop jar hadoop-${version}-examples.jar randomtextwriter
- *            [-outFormat <i>output format class</i>] <i>output</i> 
+ * <i>input (ignored)</i> <i>output</i> [-outFormat <i>output format class</i>]
  */
 public class RandomTextWriter extends Configured implements Tool {
   
@@ -107,18 +107,11 @@ public class RandomTextWriter extends Configured implements Tool {
      * Save the configuration value that we need to write the data.
      */
     public void configure(JobConf job) {
-      numBytesToWrite = job.getLong("test.randomtextwrite.bytes_per_map",
-                                    1*1024*1024*1024);
-      minWordsInKey = 
-        job.getInt("test.randomtextwrite.min_words_key", 5);
-      wordsInKeyRange = 
-        (job.getInt("test.randomtextwrite.max_words_key", 10) - 
-         minWordsInKey);
-      minWordsInValue = 
-        job.getInt("test.randomtextwrite.min_words_value", 10);
-      wordsInValueRange = 
-        (job.getInt("test.randomtextwrite.max_words_value", 100) - 
-         minWordsInValue);
+      numBytesToWrite = job.getLong("test.randomtextwrite.bytes_per_map", 1 * 1024 * 1024);
+      minWordsInKey = job.getInt("test.randomtextwrite.min_words_key", 2);
+      wordsInKeyRange = (job.getInt("test.randomtextwrite.max_words_key", 5) - minWordsInKey);
+      minWordsInValue = job.getInt("test.randomtextwrite.min_words_value", 10);
+      wordsInValueRange = (job.getInt("test.randomtextwrite.max_words_value", 40) - minWordsInValue);
     }
     
     /**
@@ -130,10 +123,8 @@ public class RandomTextWriter extends Configured implements Tool {
       int itemCount = 0;
       while (numBytesToWrite > 0) {
         // Generate the key/value 
-        int noWordsKey = minWordsInKey + 
-          (wordsInKeyRange != 0 ? random.nextInt(wordsInKeyRange) : 0);
-        int noWordsValue = minWordsInValue + 
-          (wordsInValueRange != 0 ? random.nextInt(wordsInValueRange) : 0);
+        int noWordsKey = minWordsInKey + (wordsInKeyRange != 0 ? random.nextInt(wordsInKeyRange) : 0);
+        int noWordsValue = minWordsInValue + (wordsInValueRange != 0 ? random.nextInt(wordsInValueRange) : 0);
         Text keyWords = generateSentence(noWordsKey);
         Text valueWords = generateSentence(noWordsValue);
         
@@ -166,11 +157,11 @@ public class RandomTextWriter extends Configured implements Tool {
   }
   
   /**
-   * This is the main routine for launching a distributed random write job.
-   * It runs 10 maps/node and each node writes 1 gig of data to a DFS file.
-   * The reduce doesn't do anything.
+   * This is the main routine for launching a distributed random write job. It
+   * runs 4 maps/node and each node writes 1 mb of data to a DFS file. The
+   * reduce doesn't do anything.
    * 
-   * @throws IOException 
+   * @throws IOException
    */
   public int run(String[] args) throws Exception {    
     if (args.length == 0) {
@@ -190,9 +181,8 @@ public class RandomTextWriter extends Configured implements Tool {
     
     JobClient client = new JobClient(job);
     ClusterStatus cluster = client.getClusterStatus();
-    int numMapsPerHost = job.getInt("test.randomtextwrite.maps_per_host", 10);
-    long numBytesToWritePerMap = job.getLong("test.randomtextwrite.bytes_per_map",
-                                             1*1024*1024*1024);
+    int numMapsPerHost = job.getInt("test.randomtextwrite.maps_per_host", 4);
+    long numBytesToWritePerMap = job.getLong("test.randomtextwrite.bytes_per_map", 1*1024*1024);
     if (numBytesToWritePerMap == 0) {
       System.err.println("Cannot have test.randomtextwrite.bytes_per_map set to 0");
       return -2;

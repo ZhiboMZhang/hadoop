@@ -450,8 +450,8 @@ public class WorkflowClient extends Configured {
       // Compute # of maps/reduces.
       // Can't compute maps without intermediate data, so just assume proper
       // value is given in the configuration file.
-      LOG.info("Set # of reduces: " + jobConf.getNumReduceTasks());
       LOG.info("Set # of maps: " + jobConf.getNumMapTasks());
+      LOG.info("Set # of reduces: " + jobConf.getNumReduceTasks());
     }
   }
 
