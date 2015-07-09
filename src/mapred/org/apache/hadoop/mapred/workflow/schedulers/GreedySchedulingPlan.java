@@ -46,7 +46,10 @@ import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingPlan;
 import org.apache.hadoop.mapred.workflow.scheduling.WorkflowTask;
 import org.apache.hadoop.mapreduce.TaskType;
 
-
+// We can assume that all tasks have the same execution time (which is given).
+// Priorities list keeps a list of WorkflowNodes.
+// (corresponding to TASKS, not stages).
+// TODO: convert unconstrained (unlimited res) to constained
 public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
 
   private static class WorkflowTaskPair {
@@ -88,11 +91,17 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
   private Map<String, WorkflowNode> taskMapping;
   private Map<String, String> trackerMapping;  // trackerName -> machineType
 
-  // We can assume that all tasks have the same execution time (which is given).
-  // Priorities list keeps a list of WorkflowNodes.
-  // (corresponding to TASKS, not stages).
+  // Used in getExecutableJobs().
+  Collection<String> prevFinishedJobs;
+  Collection<String> prevExecutableJobs;
 
-  // TODO: convert unconstrained (unlimited res) to constained
+  public GreedySchedulingPlan() {
+    // The workflowDag & trackerMapping are init'd in generatePlan via a called
+    // function. This is also why we call new for them in readFields but not here.
+    prevFinishedJobs = new HashSet<String>();
+    prevExecutableJobs = new HashSet<String>();
+    taskMapping = new HashMap<String, WorkflowNode>();
+  }
 
   @Override
   public boolean generatePlan(Set<MachineType> machineTypes,
@@ -250,8 +259,6 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     // WorkflowNode represents a task to be executed (WorkflowNodes are
     // repeated).
 
-    taskMapping = new HashMap<String, WorkflowNode>();
-
     for (WorkflowNode node : workflowDag.getNodes()) {
       taskMapping.put(node.getJobName(), node);
       LOG.info("Added pair: " + node.getJobName() + "/" + node);
@@ -368,9 +375,6 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     return false;
   }
 
-  Collection<String> prevFinishedJobs = new HashSet<String>();
-  Collection<String> prevExecutableJobs = new HashSet<String>();
-
   @Override
   // TODO: what if first call finishedJobs isn't null --> error checking
   public List<String> getExecutableJobs(Collection<String> finishedJobs) {
@@ -450,7 +454,6 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     workflowDag = new WorkflowDAG();
     workflowDag.readFields(in);
 
-    taskMapping = new HashMap<String, WorkflowNode>();
     int numTaskMappings = in.readInt();
     for (int i = 0; i < numTaskMappings; i++) {
       String key = Text.readString(in);
@@ -467,13 +470,11 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
       trackerMapping.put(key, value);
     }
 
-    prevFinishedJobs = new HashSet<String>();
     int numFinishedJobs = in.readInt();
     for (int i = 0; i < numFinishedJobs; i++) {
       prevFinishedJobs.add(Text.readString(in));
     }
 
-    prevExecutableJobs = new HashSet<String>();
     int numExecutableJobs = in.readInt();
     for (int i = 0; i < numExecutableJobs; i++) {
       prevExecutableJobs.add(Text.readString(in));
