@@ -40,9 +40,9 @@ public class TestSequenceFileAsBinaryOutputFormat extends TestCase {
     JobConf job = new JobConf();
     FileSystem fs = FileSystem.getLocal(job);
     
-    Path dir = 
-      new Path(new Path(new Path(System.getProperty("test.build.data",".")), 
-                        FileOutputCommitter.TEMP_DIR_NAME), "_" + attempt);
+    Path dir =
+        new Path(new Path(new Path(System.getProperty("test.build.data", ".")),
+            FileOutputCommitter.getTempDirName(null)), "_" + attempt);
     Path file = new Path(dir, "testbinary.seq");
     Random r = new Random();
     long seed = r.nextLong();

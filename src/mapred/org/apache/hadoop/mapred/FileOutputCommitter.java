@@ -33,12 +33,13 @@ import org.apache.hadoop.util.StringUtils;
  **/
 public class FileOutputCommitter extends OutputCommitter {
 
-  public static final Log LOG = LogFactory.getLog(
-      "org.apache.hadoop.mapred.FileOutputCommitter");
-/**
-   * Temporary directory name 
-   */
-  public static final String TEMP_DIR_NAME = "_temporary";
+  public static final Log LOG = LogFactory.getLog("org.apache.hadoop.mapred.FileOutputCommitter");
+
+  /** Temporary directory name */
+  public static String getTempDirName(String optionalJobName) {
+    return (optionalJobName == null ? "" : optionalJobName) + "_temporary";
+  }
+
   public static final String SUCCEEDED_FILE_NAME = "_SUCCESS";
   static final String SUCCESSFUL_JOB_OUTPUT_DIR_MARKER =
     "mapreduce.fileoutputcommitter.marksuccessfuljobs";
@@ -47,7 +48,7 @@ public class FileOutputCommitter extends OutputCommitter {
     JobConf conf = context.getJobConf();
     Path outputPath = FileOutputFormat.getOutputPath(conf);
     if (outputPath != null) {
-      Path tmpDir = new Path(outputPath, FileOutputCommitter.TEMP_DIR_NAME);
+      Path tmpDir = new Path(outputPath, getTempDirName(conf.getJobName()));
       FileSystem fileSys = tmpDir.getFileSystem(conf);
       if (!fileSys.mkdirs(tmpDir)) {
         LOG.error("Mkdirs failed to create " + tmpDir.toString());
@@ -90,7 +91,7 @@ public class FileOutputCommitter extends OutputCommitter {
     // do the clean up of temporary directory
     Path outputPath = FileOutputFormat.getOutputPath(conf);
     if (outputPath != null) {
-      Path tmpDir = new Path(outputPath, FileOutputCommitter.TEMP_DIR_NAME);
+      Path tmpDir = new Path(outputPath, getTempDirName(conf.getJobName()));
       FileSystem fileSys = tmpDir.getFileSystem(conf);
       context.getProgressible().progress();
       if (fileSys.exists(tmpDir)) {
@@ -227,9 +228,10 @@ public class FileOutputCommitter extends OutputCommitter {
     JobConf conf = taskContext.getJobConf();
     Path outputPath = FileOutputFormat.getOutputPath(conf);
     if (outputPath != null) {
-      Path p = new Path(outputPath,
-                     (FileOutputCommitter.TEMP_DIR_NAME + Path.SEPARATOR +
-                      "_" + taskContext.getTaskAttemptID().toString()));
+      Path p =
+          new Path(outputPath, (getTempDirName(conf.getJobName())
+              + Path.SEPARATOR + "_" + taskContext.getTaskAttemptID()
+              .toString()));
       try {
         FileSystem fs = p.getFileSystem(conf);
         return p.makeQualified(fs);
@@ -244,8 +246,9 @@ public class FileOutputCommitter extends OutputCommitter {
   Path getWorkPath(TaskAttemptContext taskContext, Path basePath) 
   throws IOException {
     // ${mapred.out.dir}/_temporary
-    Path jobTmpDir = new Path(basePath, FileOutputCommitter.TEMP_DIR_NAME);
-    FileSystem fs = jobTmpDir.getFileSystem(taskContext.getJobConf());
+    JobConf conf = taskContext.getJobConf();
+    Path jobTmpDir = new Path(basePath, getTempDirName(conf.getJobName()));
+    FileSystem fs = jobTmpDir.getFileSystem(conf);
     if (!fs.exists(jobTmpDir)) {
       throw new IOException("The temporary job-output directory " + 
           jobTmpDir.toString() + " doesn't exist!"); 

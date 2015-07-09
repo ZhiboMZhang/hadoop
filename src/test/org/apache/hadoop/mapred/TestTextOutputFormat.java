@@ -38,11 +38,9 @@ public class TestTextOutputFormat extends TestCase {
   // A random task attempt id for testing.
   private static String attempt = "attempt_200707121733_0001_m_000000_0";
 
-  private static Path workDir = 
-    new Path(new Path(
-                      new Path(System.getProperty("test.build.data", "."), 
-                               "data"), 
-                      FileOutputCommitter.TEMP_DIR_NAME), "_" + attempt);
+  private static Path workDir = new Path(new Path(new Path(System.getProperty(
+      "test.build.data", "."), "data"),
+      FileOutputCommitter.getTempDirName(null)), "_" + attempt);
 
   @SuppressWarnings("unchecked")
   public void testFormat() throws Exception {
