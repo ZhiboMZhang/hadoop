@@ -529,7 +529,7 @@ public class WorkflowClient extends Configured {
       if (!deps.contains(job)) {
         jobConf.setOutputDir(workflowOutput);
 
-        LOG.info("Set output of " + job + "(now: "
+        LOG.info("Set output of " + job + " (now: "
             + jobConf.get("mapred.output.dir") + ") to be " + workflowOutput);
       }
     }
