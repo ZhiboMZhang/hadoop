@@ -274,7 +274,10 @@ public abstract class FileOutputFormat<K, V> extends OutputFormat<K, V> {
    * Get the base output name for the output file.
    */
   protected static String getOutputName(JobContext job) {
-    return job.getConfiguration().get(BASE_OUTPUT_NAME, PART);
+    String base = PART;
+    String jobName = job.getJobName();
+    if (jobName != null && jobName != "") { base = jobName + "-" + PART; }
+    return job.getConfiguration().get(BASE_OUTPUT_NAME, base);
   }
 
   /**

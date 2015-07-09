@@ -806,7 +806,7 @@ class MapTask extends Task {
     public DirectMapOutputCollector(TaskUmbilicalProtocol umbilical,
         JobConf job, TaskReporter reporter) throws IOException {
       this.reporter = reporter;
-      String finalName = getOutputName(getPartition());
+      String finalName = getOutputName(job.getJobName(), getPartition());
       FileSystem fs = FileSystem.get(job);
 
       

@@ -446,8 +446,7 @@ public class TestMapRed extends TestCase implements Tool {
       RunningJob rj = JobClient.runJob(conf);
       assertTrue("job was complete", rj.isComplete());
       assertTrue("job was successful", rj.isSuccessful());
-      Path output = new Path(outDir,
-                             Task.getOutputName(0));
+      Path output = new Path(outDir, Task.getOutputName(null, 0));
       assertTrue("reduce output exists " + output, fs.exists(output));
       SequenceFile.Reader rdr = 
         new SequenceFile.Reader(fs, output, conf);

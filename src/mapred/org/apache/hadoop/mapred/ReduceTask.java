@@ -486,7 +486,7 @@ class ReduceTask extends Task {
     Reducer<INKEY,INVALUE,OUTKEY,OUTVALUE> reducer = 
       ReflectionUtils.newInstance(job.getReducerClass(), job);
     // make output collector
-    String finalName = getOutputName(getPartition());
+    String finalName = getOutputName(job.getJobName(), getPartition());
 
     RecordWriter<OUTKEY, OUTVALUE> out = 
         new OldTrackingRecordWriter<OUTKEY, OUTVALUE>(

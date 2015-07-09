@@ -120,8 +120,12 @@ abstract public class Task implements Writable, Configurable {
     NUMBER_FORMAT.setGroupingUsed(false);
   }
 
-  static synchronized String getOutputName(int partition) {
-    return "part-" + NUMBER_FORMAT.format(partition);
+  static synchronized String getOutputName(String optionalJobName, int partition) {
+    String base = "part-";
+    if (optionalJobName != null && optionalJobName != "") {
+      base = optionalJobName + "-" + base;
+    }
+    return base + NUMBER_FORMAT.format(partition);
   }
 
   ////////////////////////////////////////////
