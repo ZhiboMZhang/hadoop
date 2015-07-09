@@ -192,7 +192,7 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           LOG.info("Got back executable jobs: " + jobNames);
 
           if (jobNames == null || jobNames.size() == 0) {
-            LOG.info("All workflow jobs have been started.");
+            LOG.info("All executable workflow jobs have been started.");
             continue;
           }
 

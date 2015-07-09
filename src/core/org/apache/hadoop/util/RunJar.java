@@ -213,7 +213,8 @@ public class RunJar {
     List<String> newArgsList = new ArrayList<String>();
     String[] newArgs = null;
     if (args.length < 3 && inputDirectory != null && outputDirectory != null) {
-      newArgsList.addAll(Arrays.asList(inputDirectory, outputDirectory));
+      // TODO: Clean up this whole thing.
+      newArgsList.addAll(Arrays.asList("/fakeInput", "/fakeOutput"));
       if (!arguments.equals("")) {
         newArgsList.addAll(Arrays.asList(arguments.split(" ")));
       }

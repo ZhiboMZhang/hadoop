@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
@@ -481,7 +482,7 @@ public class WorkflowClient extends Configured {
       String output = Path.SEPARATOR + workflow.getWorkflowName() + "_" + jobName;
       conf.setOutputDir(output);
 
-      LOG.info("Default job output directory: " + output);
+      LOG.info("Default output dir for " + jobName + ": " + conf.getOutputDir());
     }
 
     // Iterate through jobs with dependencies to set their in/output paths.
@@ -490,15 +491,18 @@ public class WorkflowClient extends Configured {
       String input = "";
 
       // Add an input directory to each job for each of it's dependencies.
-      for (String dependency : dependencies.get(successor)) {
+      Iterator<String> dependenciesIter = dependencies.get(successor).iterator();
+      while (dependenciesIter.hasNext()) {
+        String dependency = dependenciesIter.next();
         JobConf dep = jobs.get(dependency);
-        input += dep.getOutputDir() + ", ";
+
+        input += dep.getOutputDir();
+        if (dependenciesIter.hasNext()) { input += ","; }
 
         deps.add(dependency);
       }
 
       // Finalize the path and convert it to have a HDFS prefix.
-      input = input.substring(0, input.length() - 2);
       FileInputFormat.setInputPaths(succ, input);
 
       LOG.info("Set " + succ.getJobName() + " input as " + succ.getInputDir());

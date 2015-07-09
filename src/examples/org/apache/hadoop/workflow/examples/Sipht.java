@@ -16,13 +16,32 @@
  */
 package org.apache.hadoop.workflow.examples;
 
-import java.util.Arrays;
+import java.io.IOException;
 
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.FileOutputFormat;
 import org.apache.hadoop.mapred.workflow.WorkflowClient;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
 
 public class Sipht {
+
+  private static void addAndConfigureJob(WorkflowConf conf, String jobName,
+      String jobJar, String jobClass, int numMaps, int numReds, long mapTime,
+      long redTime) throws IOException {
+
+    String jobArgs = numMaps + " " + numReds + " " + mapTime + " " + redTime;
+
+    conf.addJob(jobName, jobJar);
+    conf.setJobMainClass(jobName, jobClass);
+    conf.setJobArguments(jobName, jobArgs);
+
+    conf.getJobs().get(jobName).setNumMapTasks(numMaps);
+    conf.getJobs().get(jobName).setNumReduceTasks(numReds);
+  }
+
+  private static long THIRTY_SECONDS = 30000L;
 
   public static void main(String[] args) throws Exception {
 
@@ -38,64 +57,77 @@ public class Sipht {
     // Specify the jobs that comprise the workflow.
     // Entries for these jobs must appear in the time-price table xml file.
     // TODO: explain names (see 'Characterization of Scientific Workflows')
+    String sleepJobJar = "sleepjob.jar";
+    String sleepJobClass = "org.apache.hadoop.workflow.examples.jobs.SleepJob";
 
     // Right side of diagram
-    conf.addJob("patser-concat", "patser-concat.jar");
+    addAndConfigureJob(conf,
+        "patser-concat", sleepJobJar, sleepJobClass,
+        3, 1, THIRTY_SECONDS, THIRTY_SECONDS); // Maps = deps reduces
 
-    for (int i = 1; i <= 20; i++) {
-      String formattedIndex = Integer.toString(i, 10);
-      conf.addJob("patser-" + formattedIndex, "patser.jar");
-      conf.addDependency("patser-concat", "patser-" + formattedIndex);
+    for (int i = 1; i <= 3; i++) {
+      String jobName = "patser-" + Integer.toString(i, 10);
+
+      addAndConfigureJob(conf,
+          jobName, sleepJobJar, sleepJobClass,
+          3, 1, THIRTY_SECONDS, THIRTY_SECONDS);
+      conf.setJobInputPaths(jobName, "/sipht-patser-input");
+      conf.addDependency("patser-concat", jobName);
     }
 
     // Left side of diagram, left to right, top to bottom.
-    conf.addJob("transterm", "transterm.jar");
-    conf.addJob("findterm", "findterm.jar");
-    conf.addJob("rna-motif", "rna-motif.jar");
-    conf.addJob("blast", "blast.jar");
+    //conf.addJob("transterm", "transterm.jar");
+    //conf.addJob("findterm", "findterm.jar");
+    //conf.addJob("rna-motif", "rna-motif.jar");
+    //conf.addJob("blast", "blast.jar");
 
-    conf.addJob("snra", "snra.jar");
-    conf.addJob("ffn-parse", "ffn-parse.jar");
+    //conf.addJob("snra", "snra.jar");
+    //conf.addJob("ffn-parse", "ffn-parse.jar");
 
-    conf.addJob("blast-synteny", "blast-synteny.jar");
-    conf.addJob("blast-candidate", "blast-candidate.jar");
-    conf.addJob("blast-qrna", "blast-qrna.jar");
-    conf.addJob("blast-paralogues", "blast-paralogues.jar");
+    //conf.addJob("blast-synteny", "blast-synteny.jar");
+    //conf.addJob("blast-candidate", "blast-candidate.jar");
+    //conf.addJob("blast-qrna", "blast-qrna.jar");
+    //conf.addJob("blast-paralogues", "blast-paralogues.jar");
 
-    conf.addJob("snra-annotate", "snra-annotate.jar");
-    conf.addJob("last-transfer", "last-transfer.jar");
+    //conf.addJob("snra-annotate", "snra-annotate.jar");
+    //conf.addJob("last-transfer", "last-transfer.jar");
 
     // Specify remaining dependencies.
-    conf.addDependency("last-transfer", "snra-annotate");
+    //conf.addDependency("last-transfer", "snra-annotate");
 
-    conf.addDependencies("snra-annotate", Arrays.asList(
-        "patser-concat",
-        "blast-synteny",
-        "blast-candidate",
-        "blast-qrna",
-        "blast-paralogues"));
+    //conf.addDependencies("snra-annotate", Arrays.asList(
+    //    "patser-concat",
+    //    "blast-synteny",
+    //    "blast-candidate",
+    //    "blast-qrna",
+    //    "blast-paralogues"));
     
-    conf.addDependency("blast-synteny", "ffn-parse");
-    conf.addDependency("blast-synteny", "snra");
+    //conf.addDependency("blast-synteny", "ffn-parse");
+    //conf.addDependency("blast-synteny", "snra");
 
-    conf.addDependency("blast-candidate", "snra");
-    conf.addDependency("blast-qnra", "snra");
-    conf.addDependency("blast-paralogues", "snra");
+    //conf.addDependency("blast-candidate", "snra");
+    //conf.addDependency("blast-qnra", "snra");
+    //conf.addDependency("blast-paralogues", "snra");
     
-    conf.addDependencies("snra", Arrays.asList(
-        "transterm",
-        "findterm",
-        "rna-motif",
-        "blast"));
+    //conf.addDependencies("snra", Arrays.asList(
+    //    "transterm",
+    //    "findterm",
+    //    "rna-motif",
+    //    "blast"));
 
     // Specify main classes (assuming not in jar files).
     // conf.setJobMainClass("patser", "org.company.project.class.Name");
 
     // Specify command-line parameters if required.
-    // conf.setJobArguments("patser", "-d 42");
+    //conf.setJobArguments("patser", "2 1 30 30");
+    //conf.getJobs().get("patser").setNumMapTasks(2);
+    //conf.getJobs().get("patser").setNumReduceTasks(1);
 
-    // Specify input paths.
-    conf.setJobInputPaths("patser", "/sipht-patser-input");
+    // Specify input paths. For the jobs, and for the workflow.
+    //conf.setJobInputPaths("patser", "/sipht-patser-input");
+
+    FileInputFormat.setInputPaths(conf, new Path(args[0]));
+    FileOutputFormat.setOutputPath(conf, new Path(args[1]));
 
     // Lastly, run the workflow.
     WorkflowClient.runWorkflow(conf);

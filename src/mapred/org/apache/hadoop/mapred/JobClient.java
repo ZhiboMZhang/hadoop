@@ -952,9 +952,14 @@ public class JobClient extends Configured implements MRConstants, Tool  {
         if (manifest != null) {
           Attributes attributes = manifest.getMainAttributes();
           try {
+            String inputDir = attributes.getValue("Input-Directory");
+            String outputDir = attributes.getValue("Output-Directory");
             String workflowId = attributes.getValue("Workflow-Id");
             String jobId = attributes.getValue("Job-Id");
             String jobName = attributes.getValue("Job-Name");
+            // TODO: Do we need to call other setInputPaths() for non-csv list?
+            if (inputDir != null) { FileInputFormat.setInputPaths(jobCopy, inputDir); }
+            if (outputDir != null) { FileOutputFormat.setOutputPath(jobCopy, new Path(outputDir)); }
             if (workflowId != null) { jobCopy.setWorkflowId(workflowId); }
             if (jobId != null) { jobCopy.setJobId(jobId); }
             if (jobName != null) { jobCopy.setJobName(jobName); }
