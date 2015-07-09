@@ -127,7 +127,8 @@ public class WorkflowDAG implements Writable {
    *
    * @return A list of {@link WorkflowNode}s on the critical path.
    */
-  public List<WorkflowNode> getCriticalPath(Map<TableKey, TableEntry> table) {
+  public List<WorkflowNode> getCriticalPath(Map<TableKey, TableEntry> table)
+      throws IOException {
 
     LOG.info("Computing Critical path.");
     Map<WorkflowNode, Float> distances = getWorkflowNodeWeights(table);
@@ -191,7 +192,7 @@ public class WorkflowDAG implements Writable {
    * @return A map of {@link WorkflowNode} to their weightings.
    */
   private Map<WorkflowNode, Float> getWorkflowNodeWeights(
-      Map<TableKey, TableEntry> table) {
+      Map<TableKey, TableEntry> table) throws IOException {
 
     LOG.info("Computing workflow node weights.");
     Map<WorkflowNode, Float> distances = new HashMap<WorkflowNode, Float>();
@@ -228,7 +229,7 @@ public class WorkflowDAG implements Writable {
   // Get the execution time of a node.
   // This is the sum of the slowest contained map + reduce tasks.
   private float getNodeMaxTime(Map<TableKey, TableEntry> table,
-      WorkflowNode node) {
+      WorkflowNode node) throws IOException {
 
     float maxMapWeight = 0f;
     float maxRedWeight = 0f;
@@ -237,12 +238,20 @@ public class WorkflowDAG implements Writable {
 
       String type = task.getMachineType();
       TableKey key = new TableKey(node.getJobName(), type, task.isMapTask());
-      float weight = table.get(key).execTime;
+      TableEntry entry = table.get(key);
+      if (entry != null) {
+        float weight = entry.execTime;
 
-      if (task.isMapTask() && weight > maxMapWeight) {
-        maxMapWeight = weight;
-      } else if (!task.isMapTask() && weight > maxRedWeight) {
-        maxRedWeight = weight;
+        if (task.isMapTask() && weight > maxMapWeight) {
+          maxMapWeight = weight;
+        } else if (!task.isMapTask() && weight > maxRedWeight) {
+          maxRedWeight = weight;
+        }
+      } else {
+        // IOException because info wasn't read from the configuration file.
+        throw new IOException("Entry for " + node.getJobName() + " ("
+            + (task.isMapTask() ? "map" : "reduce") + ") / " + type
+            + " does not exist in the time price table.");
       }
     }
 
@@ -252,7 +261,7 @@ public class WorkflowDAG implements Writable {
   /**
    * Compute and return the total execution time (makespan) of a WorkflowDAG.
    */
-  public float getTime(Map<TableKey, TableEntry> table) {
+  public float getTime(Map<TableKey, TableEntry> table) throws IOException {
     // Get the critical path.
     List<WorkflowNode> criticalPath = getCriticalPath(table);
 
