@@ -239,10 +239,10 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
 
   @Override
   // TODO: what if first call finishedJobs isn't null --> error checking
-  public Collection<String> getExecutableJobs(Collection<String> finishedJobs) {
+  public List<String> getExecutableJobs(Collection<String> finishedJobs) {
 
     LOG.info("In getExecutableJobs.");
-    Set<String> executableJobs = new HashSet<String>();
+    List<String> executableJobs = new ArrayList<String>();
 
     // If there are no finished jobs then return the entry nodes.
     if (finishedJobs == null || finishedJobs.size() == 0) {
@@ -261,7 +261,7 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
       return executableJobs;
     } else if (prevFinishedJobs.equals(new HashSet<String>(finishedJobs))) {
       LOG.info("Set of finished jobs is the same as before (no progress made).");
-      return prevExecutableJobs;
+      return new ArrayList<String>(prevExecutableJobs);
     } else {
       // Modify finishedJobs so that we only consider newly finished jobs.
       // And add the new finished jobs to our previously finished jobs.

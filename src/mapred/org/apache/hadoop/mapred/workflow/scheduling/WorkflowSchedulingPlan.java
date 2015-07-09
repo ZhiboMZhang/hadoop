@@ -20,6 +20,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -88,10 +89,10 @@ public abstract class WorkflowSchedulingPlan implements Writable {
    *          identified by their name. If no jobs are currently finished, null
    *          or an empty collection may be passed to the function.
    *
-   * @return A collection of jobs that are eligible for execution, as identified
-   *         by their name.
+   * @return A list of jobs ordered by priority that are eligible for execution,
+   *         as identified by their name.
    */
-  public abstract Collection<String> getExecutableJobs(
+  public abstract List<String> getExecutableJobs(
       Collection<String> finishedJobs);
 
   @Override

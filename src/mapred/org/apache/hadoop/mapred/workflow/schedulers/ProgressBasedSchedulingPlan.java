@@ -146,12 +146,12 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
 
   // For getExecutableJobs.
   // finishedJobs -> executableJobs.
-  private Map<Collection<String>, Collection<String>> executableJobMap;
+  private Map<Collection<String>, List<String>> executableJobMap;
 
   public ProgressBasedSchedulingPlan() {
     taskMapping = new HashMap<String, WorkflowNode>();
     scheduleEvents = new PriorityQueue<SchedulingEvent>();
-    executableJobMap = new HashMap<Collection<String>, Collection<String>>();
+    executableJobMap = new HashMap<Collection<String>, List<String>>();
   }
 
   @Override
@@ -245,9 +245,9 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
           finishedJobNames.add(node.getJobName());
         }
         // Consider adding more executable jobs if finishedJobs hasn't changed.
-        Collection<String> executableJobNames = executableJobMap.get(finishedJobNames);
+        List<String> executableJobNames = executableJobMap.get(finishedJobNames);
         if (executableJobNames == null) {
-          executableJobNames = new HashSet<String>();
+          executableJobNames = new ArrayList<String>();
           executableJobMap.put(finishedJobNames, executableJobNames);
         }
         for (WorkflowNode node : event.jobs) {
@@ -462,7 +462,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
   }
 
   @Override
-  public Collection<String> getExecutableJobs(Collection<String> finishedJobs) {
+  public List<String> getExecutableJobs(Collection<String> finishedJobs) {
     // TODO: test
     return executableJobMap.get(new HashSet<String>(finishedJobs));
   }
@@ -519,7 +519,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     int numJobEntries = in.readInt();
     for (int i = 0; i < numJobEntries; i++) {
       Collection<String> key = new HashSet<String>();
-      Collection<String> value = new HashSet<String>();
+      List<String> value = new ArrayList<String>();
       int keySize = in.readInt();
       int valueSize = in.readInt();
       for (int j = 0; j < keySize; j++) { key.add(Text.readString(in)); }
