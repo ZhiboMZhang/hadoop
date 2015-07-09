@@ -331,12 +331,6 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
       try {
         result = new JobTracker(conf, identifier);
         result.taskScheduler.setTaskTrackerManager(result);
-
-        if (result.taskScheduler instanceof WorkflowScheduler) {
-          ((WorkflowScheduler) result.taskScheduler)
-              .setWorkflowSchedulingProtocol(result);
-        }
-
         break;
       } catch (VersionMismatch e) {
         throw e;
@@ -753,6 +747,14 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
                     workflows.remove(workflow.getProfile().getWorkflowId());
                     for (WorkflowInProgressListener l : workflowInProgressListeners) {
                       l.workflowRemoved(workflow);
+                    }
+                  }
+                  // Also update the scheduler to remove the stale plans.
+                  for (WorkflowInProgress workflow : retiredWorkflows) {
+                    if (taskScheduler instanceof WorkflowScheduler) {
+                      WorkflowScheduler scheduler = (WorkflowScheduler) taskScheduler;
+                      WorkflowID workflowId = workflow.getWorkflowId();
+                      scheduler.removeWorkflowSchedulingPlan(workflowId);
                     }
                   }
                 }
@@ -3597,14 +3599,12 @@ public class JobTracker implements MRConstants, InterTrackerProtocol,
   // //////////////////////////////////////////////////
 
   // TODO: WORKFLOW
-  private WorkflowSchedulingPlan schedulingPlan = null;
-
-  public void setWorkflowSchedulingPlan(WorkflowSchedulingPlan schedulingPlan) {
-    this.schedulingPlan = schedulingPlan;
-  }
-
-  public WorkflowSchedulingPlan getWorkflowSchedulingPlan() {
-    return schedulingPlan;
+  public synchronized void addWorkflowSchedulingPlan(WorkflowID workflowId,
+      WorkflowSchedulingPlan schedulingPlan) {
+    if (taskScheduler instanceof WorkflowScheduler) {
+      WorkflowScheduler workflowScheduler = (WorkflowScheduler) taskScheduler;
+      workflowScheduler.addWorkflowSchedulingPlan(workflowId, schedulingPlan);
+    }
   }
 
   public synchronized WorkflowID getNewWorkflowId() throws IOException {

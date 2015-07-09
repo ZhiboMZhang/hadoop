@@ -16,7 +16,7 @@
  */
 package org.apache.hadoop.mapred.workflow.scheduling;
 
-
+import org.apache.hadoop.mapred.workflow.WorkflowID;
 
 /**
  * A {@link WorkflowScheduler} must be able to have a
@@ -26,10 +26,21 @@ package org.apache.hadoop.mapred.workflow.scheduling;
 public interface WorkflowScheduler {
 
   /**
-   * Set the workflow scheduler's scheduling protocol.
+   * Add a workflow scheduling plan to the workflow scheduler's list of
+   * scheduling plans.
    *
-   * @param workflowSchedulingProtocol The workflow scheduling protocol.
+   * @param workflowId The workflow that the scheduling plan belongs to.
+   * @param workflowSchedulingPlan The workflow scheduling plan.
    */
-  public void setWorkflowSchedulingProtocol(
-      WorkflowSchedulingProtocol workflowSchedulingProtocol);
+  public void addWorkflowSchedulingPlan(WorkflowID workflowId,
+      WorkflowSchedulingPlan workflowSchedulingPlan);
+
+  /**
+   * Remove a workflow scheduling plan to the workflow scheduler's list of
+   * scheduling plans.
+   *
+   * @param workflowId The workflow that the scheduling plan belongs to.
+   * @param workflowSchedulingPlan The workflow scheduling plan.
+   */
+  public void removeWorkflowSchedulingPlan(WorkflowID workflowId);
 }

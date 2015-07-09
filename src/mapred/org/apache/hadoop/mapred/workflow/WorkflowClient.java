@@ -370,7 +370,7 @@ public class WorkflowClient extends Configured {
             throw new IOException("Workflow constraints are infeasible. Exiting.");
           }
 
-          workflowSubmitClient.setWorkflowSchedulingPlan(plan);
+          workflowSubmitClient.addWorkflowSchedulingPlan(workflowId, plan);
 
           // Write configuration into HDFS so that JobTracker can read it.
           copyAndConfigureFiles(workflow, submitWorkflowDir, submitFs);

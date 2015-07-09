@@ -18,17 +18,18 @@ package org.apache.hadoop.mapred.workflow;
 
 import java.io.IOException;
 
+import org.apache.hadoop.ipc.VersionedProtocol;
 import org.apache.hadoop.mapred.ClusterStatus;
 import org.apache.hadoop.mapred.JobID;
 import org.apache.hadoop.mapred.JobTracker;
-import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingProtocol;
+import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingPlan;
 
 /**
  * Protocol that a {@link WorkflowClient} and the {@link JobTracker} use to
  * communicate. The {@link WorkflowClient} can use these methods to submit a
  * Workflow for execution, and learn about the current system status.
  */
-public interface WorkflowSubmissionProtocol extends WorkflowSchedulingProtocol {
+public interface WorkflowSubmissionProtocol extends VersionedProtocol {
 
   public static long versionID = 1L;
 
@@ -114,4 +115,14 @@ public interface WorkflowSubmissionProtocol extends WorkflowSchedulingProtocol {
    * @throws IOException
    */
   public String getWorkflowStagingAreaDir() throws IOException;
+
+  /**
+   * Add a workflow scheduling plan to the workflow scheduler's list of
+   * scheduling plans.
+   *
+   * @param workflowId The workflow that the scheduling plan belongs to.
+   * @param workflowSchedulingPlan The workflow scheduling plan.
+   */
+  public void addWorkflowSchedulingPlan(WorkflowID workflowId,
+      WorkflowSchedulingPlan workflowSchedulingPlan);
 }

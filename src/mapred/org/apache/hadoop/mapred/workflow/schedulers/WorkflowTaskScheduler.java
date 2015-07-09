@@ -19,6 +19,7 @@ package org.apache.hadoop.mapred.workflow.schedulers;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.jar.Attributes;
@@ -42,11 +43,11 @@ import org.apache.hadoop.mapred.Task;
 import org.apache.hadoop.mapred.TaskScheduler;
 import org.apache.hadoop.mapred.TaskTrackerStatus;
 import org.apache.hadoop.mapred.workflow.WorkflowConf;
+import org.apache.hadoop.mapred.workflow.WorkflowID;
 import org.apache.hadoop.mapred.workflow.WorkflowInProgress;
 import org.apache.hadoop.mapred.workflow.scheduling.WorkflowListener;
 import org.apache.hadoop.mapred.workflow.scheduling.WorkflowScheduler;
 import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingPlan;
-import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingProtocol;
 import org.apache.hadoop.mapreduce.server.jobtracker.TaskTracker;
 import org.apache.hadoop.util.RunJar;
 
@@ -59,11 +60,11 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
   private WorkflowListener workflowListener;
   private EagerTaskInitializationListener eagerTaskInitializationListener;
 
-  private WorkflowSchedulingProtocol workflowSchedulingProtocol;
-  private WorkflowSchedulingPlan schedulingPlan;
+  private Map<WorkflowID, WorkflowSchedulingPlan> schedulingPlans;
 
   public WorkflowTaskScheduler() {
     workflowListener = new WorkflowListener();
+    schedulingPlans = new HashMap<WorkflowID, WorkflowSchedulingPlan>();
   }
 
   @Override
@@ -97,9 +98,14 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
   }
 
   @Override
-  public synchronized void setWorkflowSchedulingProtocol(
-      WorkflowSchedulingProtocol workflowSchedulingProtocol) {
-    this.workflowSchedulingProtocol = workflowSchedulingProtocol;
+  public synchronized void addWorkflowSchedulingPlan(WorkflowID workflowId,
+      WorkflowSchedulingPlan workflowSchedulingPlan) {
+    schedulingPlans.put(workflowId, workflowSchedulingPlan);
+  }
+
+  @Override
+  public synchronized void removeWorkflowSchedulingPlan(WorkflowID workflowId) {
+    schedulingPlans.remove(workflowId);
   }
 
   @Override
@@ -112,12 +118,8 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
       return null;
     }
 
-    if (schedulingPlan == null) {
-      schedulingPlan = workflowSchedulingProtocol.getWorkflowSchedulingPlan();
-      if (schedulingPlan == null) { return null; }
-    }
-
     // Find out what the next job/workflow to be executed is.
+    WorkflowSchedulingPlan schedulingPlan;
     Collection<Object> queue = workflowListener.getQueue();
     List<Task> assignedTasks = new ArrayList<Task>();
 
@@ -131,6 +133,15 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           JobInProgress job = (JobInProgress) object;
           if (job.getStatus().getRunState() != JobStatus.RUNNING) { continue; }
           LOG.info("Got job from queue.");
+
+          // Check & get the scheduling plan for the workflow.
+          WorkflowID workflowId = job.getStatus().getWorkflowId();
+          schedulingPlan = schedulingPlans.get(workflowId);
+
+          if (schedulingPlan == null) {
+            LOG.info("No scheduling plan set for workflow " + workflowId + ".");
+            continue;
+          }
 
           // A mapping between available machines (names) and machine types.
           Map<String, String> trackerMap = schedulingPlan.getTrackerMapping();
@@ -184,6 +195,15 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
 
           WorkflowInProgress workflow = (WorkflowInProgress) object;
           LOG.info("Got workflow from queue.");
+
+          // Check & get the scheduling plan for the workflow.
+          WorkflowID workflowId = workflow.getStatus().getWorkflowId();
+          schedulingPlan = schedulingPlans.get(workflowId);
+
+          if (schedulingPlan == null) {
+            LOG.info("No scheduling plan set for workflow " + workflowId + ".");
+            continue;
+          }
 
           Collection<String> finishedJobs = workflow.getStatus().getFinishedJobs();
           LOG.info("Passed in finished jobs: " + finishedJobs);
