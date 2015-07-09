@@ -82,9 +82,17 @@ public class WorkflowInProgress {
         String output = conf.getOutputDir();
         if (!output.equals(workflowOutput)) { ioDirs.add(output); }
 
-        // An entry job doesn't have to have the workflowInput as its input.
+        // Add all input directories to the removal queue. (other than the
+        // workflowInput, it's not specified as a dependency).
         if (workflowConf.getDependencies().get(conf.getJobName()) != null) {
-          ioDirs.add(conf.getInputDir());
+          String inputDir = conf.getInputDir();
+          // Input directory could actually be multiple directories.
+          if (inputDir.contains(",")) {
+            String[] inputDirs = inputDir.split(",");
+            for (String inputPath : inputDirs) { ioDirs.add(inputPath); }
+          } else {
+            ioDirs.add(conf.getInputDir());
+          }
         }
       }
       for (String dir : ioDirs) {
