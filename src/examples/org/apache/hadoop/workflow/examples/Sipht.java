@@ -49,8 +49,8 @@ public class Sipht {
     // Set any constraints.
     // Budget takes an amount in dollars.
     // Deadline takes a time in any of seconds [s], minutes (m), or hours (h).
-    conf.setConstraint(Constraints.BUDGET, "14.52");
-    conf.setConstraint(Constraints.DEADLINE, "30");
+    conf.setConstraint(Constraints.BUDGET, "4.52");
+    conf.setConstraint(Constraints.DEADLINE, "30m");
 
     // Specify the jobs that comprise the workflow.
     // Entries for these jobs must appear in the time-price table xml file.
@@ -58,12 +58,12 @@ public class Sipht {
 
     // Right side of diagram
     // Set the # of maps to be the number of dependencies * each # of reduces.
-    addAndConfigSleepJob(conf, "patser-concat", 3, 1, 30, 30);
+    addAndConfigSleepJob(conf, "patser-concat", 3, 1, 0, 0);
 
     for (int i = 1; i <= 3; i++) {
       String jobName = "patser-" + Integer.toString(i, 10);
 
-      addAndConfigSleepJob(conf, jobName, 3, 1, 30, 30);
+      addAndConfigSleepJob(conf, jobName, 3, 1, 0, 0);
       // Assume 3 files in this directory = 3 maps.
       conf.setJobInputPaths(jobName, "/sipht-patser-input");
       conf.addDependency("patser-concat", jobName);
@@ -71,21 +71,21 @@ public class Sipht {
 
     // Left side of diagram, left to right, top to bottom.
     // Main workflow input has 2 files for input = 2 maps.
-    addAndConfigSleepJob(conf, "transterm", 2, 1, 30, 30);
-    addAndConfigSleepJob(conf, "findterm", 2, 1, 30, 30);
-    addAndConfigSleepJob(conf, "rna-motif", 2, 1, 30, 30);
-    addAndConfigSleepJob(conf, "blast", 2, 1, 30, 30);
+    addAndConfigSleepJob(conf, "transterm", 2, 1, 0, 0);
+    addAndConfigSleepJob(conf, "findterm", 2, 1, 0, 0);
+    addAndConfigSleepJob(conf, "rna-motif", 2, 1, 0, 0);
+    addAndConfigSleepJob(conf, "blast", 2, 1, 0, 0);
 
-    addAndConfigSleepJob(conf, "srna", 4, 1, 30, 30);
-    addAndConfigSleepJob(conf, "ffn-parse", 1, 1, 30, 30);
+    addAndConfigSleepJob(conf, "srna", 4, 1, 0, 0);
+    addAndConfigSleepJob(conf, "ffn-parse", 1, 1, 0, 0);
 
-    addAndConfigSleepJob(conf, "blast-synteny", 2, 1, 30, 30);
-    addAndConfigSleepJob(conf, "blast-candidate", 1, 1, 30, 30);
-    addAndConfigSleepJob(conf, "blast-qrna", 1, 1, 30, 30);
-    addAndConfigSleepJob(conf, "blast-paralogues", 1, 1, 30, 30);
+    addAndConfigSleepJob(conf, "blast-synteny", 2, 1, 0, 0);
+    addAndConfigSleepJob(conf, "blast-candidate", 1, 1, 0, 0);
+    addAndConfigSleepJob(conf, "blast-qrna", 1, 1, 0, 0);
+    addAndConfigSleepJob(conf, "blast-paralogues", 1, 1, 0, 0);
 
-    addAndConfigSleepJob(conf, "srna-annotate", 6, 1, 30, 30);
-    addAndConfigSleepJob(conf, "last-transfer", 1, 1, 30, 30);
+    addAndConfigSleepJob(conf, "srna-annotate", 6, 1, 0, 0);
+    addAndConfigSleepJob(conf, "last-transfer", 1, 1, 0, 0);
 
     // Specify remaining dependencies.
     conf.addDependency("last-transfer", "srna-annotate");

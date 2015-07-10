@@ -242,7 +242,9 @@ public class TimePriceTable {
 
         TableEntry entry = table.get(key);
         if (machineType.getName().equals(entry.machineTypeName)) {
-          entry.cost = (entry.execTime / 3600f) * machineType.getChargeRate();
+          // Convert entry from seconds to hours to do computation.
+          entry.cost = entry.execTime * machineType.getChargeRate() / 3600f;
+
           LOG.info("Updated " + entry.jobName + "/" + entry.machineTypeName
               + (entry.isMapTask ? "/map" : "/red") + " cost to " + entry.cost);
         }
@@ -259,7 +261,7 @@ public class TimePriceTable {
       TableEntry entry = table.get(key);
       LOG.info(entry.jobName + "/" + entry.machineTypeName + "/"
           + (entry.isMapTask ? "map" : "red") + ": " + entry.execTime
-          + "seconds, $" + entry.cost);
+          + " seconds, $" + entry.cost);
     }
     LOG.info("");
   }

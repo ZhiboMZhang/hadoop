@@ -56,12 +56,12 @@ public class SleepJob extends Configured implements Tool,
   public void map(LongWritable key, Text value,
       OutputCollector<Text, Text> output, Reporter reporter) throws IOException {
 
-    // try {
-    // Thread.sleep(mapSleepDuration);
-    // } catch (InterruptedException ie) {
-    // throw new IOException("Map task " + mapNum + " for " + jobName
-    // + " interrupted while sleeping.");
-    // }
+    try {
+      Thread.sleep(mapSleepDuration);
+    } catch (InterruptedException ie) {
+      throw new IOException("Map task for " + jobName
+          + " interrupted while sleeping.");
+    }
 
     // The keys are the position in the file, which we don't care about.
     // Values are a line of text.
@@ -75,12 +75,12 @@ public class SleepJob extends Configured implements Tool,
       OutputCollector<Text, Text> output, Reporter reporter)
       throws IOException {
 
-    //try {
-    //  Thread.sleep(reduceSleepDuration);
-    //} catch (InterruptedException ie) {
-    //  throw new IOException("Reduce task " + redNum + " for " + jobName
-    //      + " interrupted while sleeping.");
-    //}
+    try {
+      Thread.sleep(reduceSleepDuration);
+    } catch (InterruptedException ie) {
+      throw new IOException("Reduce task for " + jobName
+          + " interrupted while sleeping.");
+    }
 
     // The keys are the job information. Continue the chain by prepending the
     // previous tasks to the value and putting ourself as the key.
