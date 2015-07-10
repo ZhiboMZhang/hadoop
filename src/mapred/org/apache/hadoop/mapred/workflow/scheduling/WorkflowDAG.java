@@ -10,8 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.ResourceStatus;
@@ -25,8 +23,6 @@ import org.apache.hadoop.mapred.workflow.WorkflowConf;
  */
 public class WorkflowDAG implements Writable {
   
-  private static final Log LOG = LogFactory.getLog(WorkflowDAG.class);
-
   private Set<WorkflowNode> nodes;
   private Set<WorkflowNode> entryNodes = null;
   private Set<WorkflowNode> exitNodes = null;
@@ -130,7 +126,6 @@ public class WorkflowDAG implements Writable {
   public List<WorkflowNode> getCriticalPath(Map<TableKey, TableEntry> table)
       throws IOException {
 
-    LOG.info("Computing Critical path.");
     Map<WorkflowNode, Float> distances = getWorkflowNodeWeights(table);
     List<WorkflowNode> criticalPath = new ArrayList<WorkflowNode>();
 
@@ -141,17 +136,13 @@ public class WorkflowDAG implements Writable {
     // This allows computation of only one path, rather than multiple paths.
     WorkflowNode fakeExitNode = new WorkflowNode("fakeNode", 0, 0);
     this.addNode(fakeExitNode);
-    LOG.info("Added fake exit node.");
 
     for (WorkflowNode exit : exitNodes) {
       this.addPredecessor(fakeExitNode, exit);
-      LOG.info("Added " + exit.getJobName()
-          + " as predecessor of fake exit node.");
     }
 
     WorkflowNode criticalNode = fakeExitNode;
     do {
-      LOG.info("Creating critical path, added " + criticalNode.getJobName());
       criticalNode = getNextCriticalNode(distances, criticalNode);
       criticalPath.add(0, criticalNode);
     } while (criticalNode != null);
@@ -159,7 +150,6 @@ public class WorkflowDAG implements Writable {
     // Null check is after adding, so remove the null element.
     criticalPath.remove(0);
     removeNode(fakeExitNode);
-    LOG.info("Removed fake exit node.");
 
     return criticalPath;
   }
@@ -171,8 +161,6 @@ public class WorkflowDAG implements Writable {
     WorkflowNode criticalNode = null;
 
     for (WorkflowNode predecessor : getPredecessors(current)) {
-      LOG.info("Checking distance of predecessor " + predecessor.getJobName()
-          + " of node " + current.getJobName());
       float distance = distances.get(predecessor);
       if (distance > maxDistance) {
         maxDistance = distance;
@@ -194,7 +182,6 @@ public class WorkflowDAG implements Writable {
   private Map<WorkflowNode, Float> getWorkflowNodeWeights(
       Map<TableKey, TableEntry> table) throws IOException {
 
-    LOG.info("Computing workflow node weights.");
     Map<WorkflowNode, Float> distances = new HashMap<WorkflowNode, Float>();
     List<WorkflowNode> ordering = getTopologicalOrdering();
 
@@ -205,10 +192,7 @@ public class WorkflowDAG implements Writable {
     for (WorkflowNode entry : getEntryNodes()) {
       float maxTime = getNodeMaxTime(table, entry);
       distances.put(entry, maxTime);
-      LOG.info("Updated entry node '" + entry.getJobName() + "' weight to "
-          + maxTime);
     }
-    LOG.info("Initialized node weights.");
 
     // Relax the nodes to find their proper weight.
     for (WorkflowNode node : ordering) {
@@ -218,7 +202,6 @@ public class WorkflowDAG implements Writable {
 
         if (distances.get(next) < otherPath) {
           distances.put(next, otherPath);
-          LOG.info("Updated " + next.getJobName() + " weight to " + otherPath);
         }
       }
     }
@@ -342,7 +325,6 @@ public class WorkflowDAG implements Writable {
   public static WorkflowDAG construct(Set<MachineType> machineTypes,
       Map<String, ResourceStatus> machines, WorkflowConf workflow) {
 
-    LOG.info("Constructing WorkflowDAG.");
     WorkflowDAG dag = new WorkflowDAG();
 
     // A temporary mapping to help with DAG creation.
@@ -360,7 +342,6 @@ public class WorkflowDAG implements Writable {
 
       dag.addNode(node);
       confToNode.put(workflowJob, node);
-      LOG.info("Added node for job " + jobName);
     }
 
     // Copy over dependencies, add successors & find entry/exit jobs.
@@ -375,7 +356,6 @@ public class WorkflowDAG implements Writable {
 
         dag.addPredecessor(node, dep);
         dag.addSuccessor(dep, node);
-        LOG.info("Added link from " + dep.getJobName() + " to " + node.getJobName());
       }
     }
 
