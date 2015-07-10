@@ -22,8 +22,11 @@ import java.util.Iterator;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.FileOutputFormat;
 import org.apache.hadoop.mapred.JobClient;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.Mapper;
@@ -142,8 +145,10 @@ public class SleepJob extends Configured implements Tool,
 
     conf.setSpeculativeExecution(false);
 
-    // FileInputFormat.setInputPaths(conf, new Path(args[0]));
-    // FileOutputFormat.setOutputPath(conf, new Path(args[1]));
+    // When running as a workflow job these are reset before job submission to
+    // the value given in the jar manifest.
+    FileInputFormat.setInputPaths(conf, new Path(args[0]));
+    FileOutputFormat.setOutputPath(conf, new Path(args[1]));
 
     JobClient.runJob(conf);
 
