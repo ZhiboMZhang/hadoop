@@ -110,6 +110,10 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
 
     LOG.info("In GreedySchedulingPlan generatePlan() function");
 
+    // Read constraint information.
+    String constraint = workflow.getConstraint(Constraints.BUDGET);
+    float maxCost = WorkflowConf.parseBudgetConstraint(constraint);
+
     // Get a mapping between actual available machines and machine types.
     trackerMapping = WorkflowUtil.matchResourceTypes(machineTypes, machines);
 
@@ -155,8 +159,6 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     // Check that constraints aren't violated.
     // Time is in seconds, Cost is in $$. (see {@link TableEntry})
     float actualCost = workflowDag.getCost(table);
-    String constraint = workflow.getConstraint(Constraints.BUDGET);
-    float maxCost = WorkflowConf.parseBudgetConstraint(constraint);
     LOG.info("Computed initial path time and workflow cost.");
     LOG.info("Workflow cost: " + actualCost + ", constraint: " + maxCost);
 
@@ -263,6 +265,13 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
       taskMapping.put(node.getJobName(), node);
       LOG.info("Added pair: " + node.getJobName() + "/" + node);
     }
+
+    // Inform the user about the schedule.
+    LOG.info("!!! Simulation complete. !!!");
+    LOG.info("Workflow total cost: " + workflowDag.getCost(table));
+    LOG.info("Workflow total time: " + workflowDag.getTime(table));
+    LOG.info("Workflow budget constraint: $" + maxCost);
+    LOG.info("Workflow deadline constraint: N/A");
 
     return true;
   }

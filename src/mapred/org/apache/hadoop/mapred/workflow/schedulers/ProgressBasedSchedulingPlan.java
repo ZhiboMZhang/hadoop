@@ -359,13 +359,19 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
         }
       }
     }
-    LOG.info("!!! Simulation complete. !!!");
 
     // Set the taskMapping variable.
     for (WorkflowNode node : workflowDag.getNodes()) {
       taskMapping.put(node.getJobName(), node);
       LOG.info("Added pair: " + node.getJobName() + "/" + node);
     }
+
+    // Inform the user about the schedule.
+    LOG.info("!!! Simulation complete. !!!");
+    LOG.info("Workflow total cost: " + workflowDag.getCost(table));
+    LOG.info("Workflow total time: " + workflowDag.getTime(table));
+    LOG.info("Workflow budget constraint: N/A");
+    LOG.info("Workflow deadline constraint: N/A");
 
     // Not meeting any constraints, so schedule is always valid.
     return true;
