@@ -46,10 +46,10 @@ import org.apache.hadoop.mapred.workflow.scheduling.WorkflowNode;
 import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingPlan;
 import org.apache.hadoop.mapred.workflow.scheduling.WorkflowTask;
 
-// Only dealing with a single workflow at a time, so don't worry about
-// implementing a custom scheduler.
+// A custom scheduler is not needed as we only deal with one workflow at a time.
 public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
 
+  // TODO: work in a priority,
   private class SchedulingEvent implements Comparable<SchedulingEvent>,
       Writable {
     public long time;
@@ -65,6 +65,11 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       this.jobName = jobName;
       this.numMaps = numMaps;
       this.numReduces = numReds;
+    }
+
+    @Override
+    public String toString() {
+      return jobName;
     }
 
     @Override
@@ -96,40 +101,53 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
 
   // Events related to the simulation of task assignment: jobs being added, and
   // jobs being completed (slots being freed).
-  private class QueueEvent implements Comparable<QueueEvent> {
+  private abstract class QueueEvent implements Comparable<QueueEvent> {
     public long time;
-    public EventType type;
+    protected EventType eventType;
 
-    public int freedMapSlots = 0;
-    public int freedRedSlots = 0;
-    public Collection<WorkflowNode> jobs = new ArrayList<WorkflowNode>();
-
-    /** At the provided time, the specified number of slots are freed. */
-    public QueueEvent(long time, int freedMapSlots, int freedRedSlots) {
+    public QueueEvent(long time, EventType eventType) {
       this.time = time;
-      this.freedMapSlots = freedMapSlots;
-      this.freedRedSlots = freedRedSlots;
-      this.type = EventType.FREE;
-    }
-
-    /** At the provided time, the specified jobs can be started. */
-    public QueueEvent(long time, Collection<WorkflowNode> jobs) {
-      this.time = time;
-      this.jobs.addAll(jobs);
-      this.type = EventType.ADD;
+      this.eventType = eventType;
     }
 
     @Override
     public int compareTo(QueueEvent other) {
+      LOG.info("comparing queue events");
       if (time > other.time) { return 1; }
       if (time < other.time) { return -1; }
       if (time == other.time) {
-        // Free events occur before add events if they have the same time.
-        if (type == EventType.FREE && other.type == EventType.ADD) { return -1; }
-        return 0;
+        if (eventType.equals(EventType.FREE)) { return -1; } else { return 1; }
       }
       return 0;
     }
+  }
+
+  private class AddEvent extends QueueEvent {
+    public WorkflowNode job;
+
+    /** At the provided time, the specified jobs can be started. */
+    public AddEvent(long time, WorkflowNode job) {
+      super(time, EventType.ADD);
+      this.job = job;
+    }
+  }
+
+  private class FreeEvent extends QueueEvent {
+    public int freedMapSlots = 0;
+    public int freedRedSlots = 0;
+
+    /** At the provided time, the specified number of slots are freed. */
+    public FreeEvent(long time, int freedMapSlots, int freedRedSlots) {
+      super(time, EventType.FREE);
+      this.freedMapSlots = freedMapSlots;
+      this.freedRedSlots = freedRedSlots;
+    }
+  }
+
+  private Collection<AddEvent> createAddEvents(long time, Collection<WorkflowNode> nodes) {
+    Set<AddEvent> events = new HashSet<AddEvent>();
+    for (WorkflowNode node : nodes) { events.add(new AddEvent(time, node)); }
+    return events;
   }
 
   private static final Log LOG = LogFactory.getLog(ProgressBasedSchedulingPlan.class);
@@ -163,10 +181,6 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
 
     // Get a mapping between actual available machines and machine types.
     trackerMapping = WorkflowUtil.matchResourceTypes(machineTypes, machines);
-
-    for (String type : trackerMapping.keySet()) {
-      LOG.info("Mapped machinetype " + type + " to " + trackerMapping.get(type));
-    }
 
     // Remove machine types that don't currently exist on the cluster.
     Iterator<MachineType> machineTypeIterator = machineTypes.iterator();
@@ -213,147 +227,116 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       totalMapSlots += status.getMaxMapSlots();
       totalRedSlots += status.getMaxReduceSlots();
     }
-    LOG.info("Computed total number of map (" + totalMapSlots
-        + ") and reduce (" + totalRedSlots + ") slots.");
+    LOG.info("Computed total number of map (" + totalMapSlots + ") and reduce (" + totalRedSlots + ") slots.");
 
-    // Event queue to hold system events in ascending order of occurrence time.
-    Queue<QueueEvent> eventQueue = new PriorityQueue<QueueEvent>();
-    eventQueue.add(new QueueEvent(0, totalMapSlots, totalRedSlots));
-    eventQueue.add(new QueueEvent(0, workflowDag.getEntryNodes()));
+    // Event queues to hold system events in ascending order of occurrence time.
+    Queue<FreeEvent> freeQueue = new PriorityQueue<FreeEvent>();
+    Queue<AddEvent> addQueue = new PriorityQueue<AddEvent>();
+    freeQueue.add(new FreeEvent(0, totalMapSlots, totalRedSlots));
+    addQueue.addAll(createAddEvents(0, workflowDag.getEntryNodes()));
 
-    List<WorkflowNode> activeJobs = new ArrayList<WorkflowNode>();
     long time = 0L;  // The current time (for simulation).
-    int mapSlots = 0;  // The number of free slots; map & reduce.
-    int redSlots = 0;
+    int freeMapSlots = 0;
+    int freeRedSlots = 0;
 
     // Main loop, simulating execution on the slots.
-    while (!eventQueue.isEmpty()) {
-      QueueEvent event = eventQueue.poll();
-      time = event.time;
+    while (!addQueue.isEmpty() && !freeQueue.isEmpty()) {
 
-      // Process the event.
-      if (event.type.equals(EventType.FREE)) {
-        mapSlots += event.freedMapSlots;
-        redSlots += event.freedRedSlots;
-        LOG.info("Got FREE event (" + time + "s). Freed " + event.freedMapSlots
-            + " map slots, " + event.freedRedSlots + " reduce slots.");
-      } else {
-        // Get the currently finished jobs.
-        // TODO: this work?
-        Collection<String> finishedJobNames = new HashSet<String>();
-        for (WorkflowNode node : finishedJobs) {
-          finishedJobNames.add(node.getJobName());
-        }
-        // Consider adding more executable jobs if finishedJobs hasn't changed.
-        List<String> executableJobNames = executableJobMap.get(finishedJobNames);
-        if (executableJobNames == null) {
-          executableJobNames = new ArrayList<String>();
-          executableJobMap.put(finishedJobNames, executableJobNames);
-        }
-        for (WorkflowNode node : event.jobs) {
-          executableJobNames.add(node.getJobName());
-        }
-        LOG.info("Got ADD event (" + time + "s). Added "
-            + Arrays.toString(executableJobNames.toArray(new String[0])) + ".");
+      FreeEvent free = freeQueue.peek();
+      AddEvent add = addQueue.peek();
 
-        activeJobs.addAll(event.jobs);
+      // If there are only free events left,
+      // or if free < add (has more priority), then add the free slots.
+      if (add == null || (free != null && free.compareTo(add) <= 0)) {
+        freeQueue.poll();
+        freeMapSlots += free.freedMapSlots;
+        freeRedSlots += free.freedRedSlots;
+        LOG.info("Got FREE event (" + time + "s).");
+        LOG.info("Freed " + free.freedMapSlots + " map slots.");
+        LOG.info("Freed " + free.freedRedSlots + " reduce slots.");
+        time = free.time;
+        continue;
       }
-      
-      if (activeJobs.isEmpty()) { continue; }
 
-      if ((mapSlots + redSlots) > 0) {
-        LOG.info("Slots are available for scheduling.");
-        // Slots are available for scheduling.
-        WorkflowNode node = activeJobs.get(0);
-        int nodeMapTasks = mapTasks.get(node.getJobName());
-        int nodeRedTasks = redTasks.get(node.getJobName());
+      WorkflowNode node = add.job;
+      int nodeMapTasks = mapTasks.get(node.getJobName());
+      int nodeRedTasks = redTasks.get(node.getJobName());
 
-        if (nodeMapTasks > 0) {
-          LOG.info("Can schedule map tasks.");
-          // Schedule map tasks.
-          int scheduledMaps = Math.min(nodeMapTasks, mapSlots);
-          scheduleEvents.add(
-              new SchedulingEvent(time, node.getJobName(), scheduledMaps, 0));
-          mapSlots -= scheduledMaps;
+      // If add <= free AND there aren't any free slots,
+      // then re-insert @ next free time.
+      if ((nodeMapTasks > 0 && freeMapSlots == 0)
+          || (nodeRedTasks > 0 && freeRedSlots == 0)) {
+        addQueue.poll();
+        LOG.info("Got ADD event, moved from (" + add.time + "s) to (" + free.time + "s)");
+        add.time = free.time;
+        addQueue.add(add);
+        continue;
+      }
+
+      // Now regular scheduling; run map tasks first, followed by reduce tasks.
+      LOG.info("Slots are available for scheduling.");
+      time = add.time;
+
+      if (nodeMapTasks > 0) {
+        // Schedule map tasks.
+        LOG.info("Can schedule map tasks.");
+        int scheduledMaps = Math.min(nodeMapTasks, freeMapSlots);
+
+        if (scheduledMaps > 0) {
+          LOG.info("Scheduling " + scheduledMaps + " map tasks.");
+          scheduleEvents.add(new SchedulingEvent(time, node.getJobName(), scheduledMaps, 0));
+          freeMapSlots -= scheduledMaps;
           mapTasks.put(node.getJobName(), (nodeMapTasks - scheduledMaps));
 
-          if (scheduledMaps > 0) {
-            LOG.info("Scheduling " + scheduledMaps + " map tasks.");
-            // Select a machine type to run the scheduled map tasks on.
-            MachineType selectedMachine = fastestMachine;
-            
-            // Set the number of scheduled tasks to the selected machine type.
-            int setTasks = 0;
-            for (WorkflowTask task : node.getMapTasks()) {
-              if (task.getMachineType() == null) {
-                task.setMachineType(selectedMachine.getName());
-                setTasks++;
-              }
-              if (setTasks == scheduledMaps) { break; }
-            }
+          // Select a machine type to run the map tasks on.
+          MachineType selectedMachine = fastestMachine;
+          setMachineTypes(selectedMachine.getName(), node, scheduledMaps, true);
 
-            TableKey nodeMapKey =
-                new TableKey(node.getJobName(), selectedMachine.getName(), true);
-            TableEntry entry = table.get(nodeMapKey);
-            eventQueue.add(new QueueEvent(time + entry.execTime, scheduledMaps, 0));
-            LOG.info("Added queueEvent to release " + scheduledMaps
-                + " map slots at time " + (time + entry.execTime) + "s.");
-          }
-        } else {
-          LOG.info("Can schedule reduce tasks.");
-          // Schedule reduce tasks.
-          int scheduledReds = Math.min(nodeRedTasks, redSlots);
-          scheduleEvents.add(
-              new SchedulingEvent(time, node.getJobName(), 0, scheduledReds));
-          redSlots -= scheduledReds;
+          // Remove the current job, and add it back when it's next looking for slots.
+          TableKey nodeMapKey = new TableKey(node.getJobName(), selectedMachine.getName(), true);
+          TableEntry entry = table.get(nodeMapKey);
+
+          freeQueue.add(new FreeEvent(time + entry.execTime, scheduledMaps, 0));
+          addQueue.poll();
+          addQueue.add(new AddEvent(free.time, node));
+          LOG.info("Added release event, " + scheduledMaps + " map slots at time " + (time + entry.execTime) + "s.");
+          LOG.info("Added add event, " + node + " at time " + free.time + "s.");
+        }
+      } else {
+        // Schedule reduce tasks.
+        LOG.info("Can schedule reduce tasks.");
+        int scheduledReds = Math.min(nodeRedTasks, freeRedSlots);
+
+        if (scheduledReds > 0) {
+          LOG.info("Scheduling " + scheduledReds + " reduce tasks.");
+          scheduleEvents.add(new SchedulingEvent(time, node.getJobName(), 0, scheduledReds));
+          freeRedSlots -= scheduledReds;
           redTasks.put(node.getJobName(), (nodeRedTasks - scheduledReds));
 
-          if (scheduledReds > 0) {
-            LOG.info("Scheduling " + scheduledReds + " reduce tasks.");
-            // Select a machine type to run the reduce tasks on.
-            MachineType selectedMachine = fastestMachine;
+          // Select a machine type to run the reduce tasks on.
+          MachineType selectedMachine = fastestMachine;
+          setMachineTypes(selectedMachine.getName(), node, scheduledReds, false);
 
-            // Set the number of scheduled tasks to the selected machine type.
-            int setTasks = 0;
-            for (WorkflowTask task : node.getReduceTasks()) {
-              if (task.getMachineType() == null) {
-                task.setMachineType(selectedMachine.getName());
-                setTasks++;
-              }
-              if (setTasks == scheduledReds) { break; }
-            }
+          // Remove the current job, add it back if it's still looking for slots.
+          TableKey nodeRedKey = new TableKey(node.getJobName(), selectedMachine.getName(), false);
+          TableEntry entry = table.get(nodeRedKey);
+          freeQueue.add(new FreeEvent(time + entry.execTime, 0, scheduledReds));
+          LOG.info("Added release event, " + scheduledReds + " reduce slots at time " + (time + entry.execTime) + "s.");
 
-            TableKey nodeRedKey =
-                new TableKey(node.getJobName(), selectedMachine.getName(), false);
-            TableEntry entry = table.get(nodeRedKey);
-            eventQueue.add(new QueueEvent(time + entry.execTime, 0, scheduledReds));
-            LOG.info("Added queueEvent to release " + scheduledReds
-                + " reduce slots at time " + (time + entry.execTime) + "s.");
+          // If all reduces have been scheduled then the current job is finished.
+          if (scheduledReds != nodeRedTasks) {
+            addQueue.poll();
+            addQueue.add(new AddEvent(free.time, node));
+            LOG.info("Added add event, " + node + " at time " + free.time + "s.");
+          } else {
 
-            // If all reduces have been scheduled then the current job is
-            // finished, and we can add new jobs.
-            if (scheduledReds == nodeRedTasks) {
-              finishedJobs.add(node);
-              activeJobs.remove(node);
-
-              LOG.info("All reduce tasks for job were scheduled, finding successors.");
-              // Get the set of successor nodes that can now be run.
-              Collection<WorkflowNode> eligibleJobs = new HashSet<WorkflowNode>();
-              for (WorkflowNode succ : workflowDag.getSuccessors(node)) {
-                boolean eligible = true;
-
-                for (WorkflowNode dep : workflowDag.getPredecessors(succ)) {
-                  if (!finishedJobs.contains(dep)) { eligible = false; }
-                }
-                if (eligible) { eligibleJobs.add(succ); }
-              }
-
-              if (eligibleJobs.size() > 0) {
-                eventQueue.add(new QueueEvent(time + entry.execTime, eligibleJobs));
-                LOG.info("Added queueEvent to add jobs "
-                    + Arrays.toString(eligibleJobs.toArray(new WorkflowNode[0]))
-                    + " at time " + (time + entry.execTime) + "s.");
-              }
+            finishedJobs.add(node);
+            LOG.info("All reduce tasks for job were scheduled, finding successors.");
+            // Get the set of successor nodes that can now be run.
+            Collection<WorkflowNode> eligibleJobs = getEligibleJobs(finishedJobs, node);
+            if (eligibleJobs.size() > 0) {
+              addQueue.addAll(createAddEvents(time + entry.execTime, eligibleJobs));
+              LOG.info("Added add event, " + Arrays.toString(eligibleJobs.toArray(new WorkflowNode[0])) + " at time " + (time + entry.execTime) + "s.");
             }
           }
         }
@@ -363,7 +346,6 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     // Set the taskMapping variable.
     for (WorkflowNode node : workflowDag.getNodes()) {
       taskMapping.put(node.getJobName(), node);
-      LOG.info("Added pair: " + node.getJobName() + "/" + node);
     }
 
     // Inform the user about the schedule.
@@ -377,20 +359,61 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     return true;
   }
 
+  // Set the number of scheduled tasks to the selected machine type.
+  private void setMachineTypes(String machine, WorkflowNode node, int numTasks, boolean isMap) {
+    int setTasks = 0;
+    Collection<WorkflowTask> tasks = (isMap ? node.getMapTasks() : node.getReduceTasks());
+
+    for (WorkflowTask task : tasks) {
+      if (task.getMachineType() == null) {
+        task.setMachineType(machine);
+        setTasks++;
+      }
+      if (setTasks == numTasks) { break; }
+    }
+  }
+
+  // Get the successor jobs of a node that are eligible for execution given a
+  // collection of finished jobs.
+  private Collection<WorkflowNode> getEligibleJobs(
+      Collection<WorkflowNode> finishedJobs, WorkflowNode node) {
+
+    Collection<WorkflowNode> eligibleJobs = new HashSet<WorkflowNode>();
+
+    for (WorkflowNode succ : workflowDag.getSuccessors(node)) {
+      boolean eligible = true;
+      for (WorkflowNode dep : workflowDag.getPredecessors(succ)) {
+        if (!finishedJobs.contains(dep)) { eligible = false; }
+      }
+      if (eligible) { eligibleJobs.add(succ); }
+    }
+
+    executableJobMap.put(nodesToNames(finishedJobs), nodesToNames(eligibleJobs));
+    return eligibleJobs;
+  }
+
+  // TODO: Enable priorities.
+  private List<String> nodesToNames(Collection<WorkflowNode> nodes) {
+    List<String> nodeNames = new ArrayList<String>();
+    for (WorkflowNode node : nodes) { nodeNames.add(node.getJobName()); }
+    return nodeNames;
+  }
+
   @Override
   public boolean matchMap(String machineType, String jobName) {
     LOG.info("In matchMap function");
 
     // Get the set of events to start at or before the current time.
     Set<SchedulingEvent> validEvents = new HashSet<SchedulingEvent>();
-    for (SchedulingEvent event = scheduleEvents.peek();
-        event.time <= currentTime;
-        validEvents.add(event));
+    while (scheduleEvents.peek().time <= currentTime) {
+      validEvents.add(scheduleEvents.poll());
+    }
+    scheduleEvents.addAll(validEvents);
     LOG.info("Valid events are: " + Arrays.toString(validEvents.toArray(new SchedulingEvent[0])));
 
     // Find a job add/execution that matches.
     for (SchedulingEvent event : validEvents) {
-      // Event must have reduces to still be in the requirement list.
+      // Event must have maps to still be in the requirement list.
       if (event.numMaps == 0) { continue; }
       if (!event.jobName.equals(jobName)) { continue; }
 
@@ -412,7 +435,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
             TableKey key = new TableKey(jobName, machineType, true);
             float execTime = table.get(key).execTime;
             if (currentTime < execTime) {
-              currentTime = (int) Math.floor(execTime);
+              currentTime = (long) Math.floor(execTime);
             }
           }
 
@@ -430,32 +453,37 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
 
     // Get the set of events to start at or before the current time.
     Set<SchedulingEvent> validEvents = new HashSet<SchedulingEvent>();
-    for (SchedulingEvent event = scheduleEvents.peek();
-        event.time <= currentTime;
-        validEvents.add(event));
+    while (scheduleEvents.peek().time <= currentTime) {
+      validEvents.add(scheduleEvents.poll());
+    }
+    scheduleEvents.addAll(validEvents);
+    LOG.info("Valid events are: " + Arrays.toString(validEvents.toArray(new SchedulingEvent[0])));
 
     // Find a job add/execution that matches.
     for (SchedulingEvent event : validEvents) {
-      // Event must have maps to still be in the requirement list.
+      // Event must have reduces to still be in the requirement list.
       if (event.numReduces == 0) { continue; }
       if (!event.jobName.equals(jobName)) { continue; }
 
+      LOG.info("Event " + event + " matches queued job & has reduces to be run.");
       Collection<WorkflowTask> tasks = taskMapping.get(jobName).getReduceTasks();
 
       // Find a task that is supposed to run on the given machine type.
       for (WorkflowTask task : tasks) {
         if (machineType.equals(task.getMachineType())) {
+          LOG.info("Found a match: " + task);
           event.numReduces--;
           tasks.remove(task);
 
           if (event.numMaps == 0 && event.numReduces == 0) {
+            LOG.info("Event has no more tasks, removing it.");
             scheduleEvents.remove(event);
 
             // Update time.
             TableKey key = new TableKey(jobName, machineType, false);
             float execTime = table.get(key).execTime;
             if (currentTime < execTime) {
-              currentTime = (int) Math.floor(execTime);
+              currentTime = (long) Math.floor(execTime);
             }
           }
 
@@ -469,8 +497,23 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
 
   @Override
   public List<String> getExecutableJobs(Collection<String> finishedJobs) {
-    // TODO: test
-    return executableJobMap.get(new HashSet<String>(finishedJobs));
+
+    List<String> executableJobs = new ArrayList<String>();
+
+    // If there are no finished jobs then return the entry nodes.
+    if (finishedJobs == null || finishedJobs.size() == 0) {
+      for (WorkflowNode node : workflowDag.getEntryNodes()) {
+        executableJobs.add(node.getJobName());
+      }
+      LOG.info("No jobs finished, returning the set of entry jobs.");
+      return executableJobs;
+    }
+
+    // TODO: It works... maybe should use some sort of test against contained
+    // elements rather than a whole set check though.
+    LOG.info("Got as finished jobs: " + finishedJobs.toString());
+    LOG.info("Returned as executable jobs: " + executableJobMap.get(finishedJobs).toString());
+    return executableJobMap.get(finishedJobs);
   }
 
   @Override
