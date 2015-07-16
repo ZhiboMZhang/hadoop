@@ -334,7 +334,12 @@ public class WorkflowConf extends Configuration implements Writable {
    * Parse a budget constraint value and return a value measured in dollars.
    */
   public static float parseBudgetConstraint(String constraint) {
-    return Float.parseFloat(constraint);
+    float budget = -1f;
+    try {
+      budget = Float.parseFloat(constraint);
+    } catch (NumberFormatException nfe) {}
+
+    return budget;
   }
 
   /**

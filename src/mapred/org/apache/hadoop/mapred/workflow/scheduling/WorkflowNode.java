@@ -107,7 +107,7 @@ public class WorkflowNode implements Writable {
 
   @Override
   public String toString() {
-    return jobName + ": " + Arrays.toString(getTasks().toArray()) + ".";
+    return jobName + ": " + Arrays.toString(getTasks().toArray());
   }
 
   @Override
