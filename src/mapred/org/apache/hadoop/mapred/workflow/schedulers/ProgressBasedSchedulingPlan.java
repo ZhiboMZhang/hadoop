@@ -19,7 +19,6 @@ package org.apache.hadoop.mapred.workflow.schedulers;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -97,56 +96,26 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     }
   }
 
-  private static enum EventType { FREE, ADD };
-
   // Events related to the simulation of task assignment: jobs being added, and
   // jobs being completed (slots being freed).
-  private abstract class QueueEvent implements Comparable<QueueEvent> {
+  private class FreeEvent implements Comparable<FreeEvent> {
     public long time;
-    protected EventType eventType;
-
-    public QueueEvent(long time, EventType eventType) {
-      this.time = time;
-      this.eventType = eventType;
-    }
-
-    @Override
-    public int compareTo(QueueEvent other) {
-      if (time > other.time) { return 1; }
-      if (time < other.time) { return -1; }
-      if (time == other.time) {
-        if (eventType.equals(EventType.FREE)) { return -1; } else { return 1; }
-      }
-      return 0;
-    }
-  }
-
-  private class AddEvent extends QueueEvent {
-    public WorkflowNode job;
-
-    /** At the provided time, the specified jobs can be started. */
-    public AddEvent(long time, WorkflowNode job) {
-      super(time, EventType.ADD);
-      this.job = job;
-    }
-  }
-
-  private class FreeEvent extends QueueEvent {
-    public int freedMapSlots = 0;
-    public int freedRedSlots = 0;
+    public int freedMapSlots;
+    public int freedRedSlots;
 
     /** At the provided time, the specified number of slots are freed. */
     public FreeEvent(long time, int freedMapSlots, int freedRedSlots) {
-      super(time, EventType.FREE);
+      this.time = time;
       this.freedMapSlots = freedMapSlots;
       this.freedRedSlots = freedRedSlots;
     }
-  }
 
-  private List<AddEvent> createAddEvents(long time, List<WorkflowNode> nodes) {
-    List<AddEvent> events = new ArrayList<AddEvent>();
-    for (WorkflowNode node : nodes) { events.add(new AddEvent(time, node)); }
-    return events;
+    @Override
+    public int compareTo(FreeEvent other) {
+      if (time > other.time) { return 1; }
+      if (time < other.time) { return -1; }
+      return 0;
+    }
   }
 
   private static final Log LOG = LogFactory.getLog(ProgressBasedSchedulingPlan.class);
@@ -155,20 +124,16 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
   private WorkflowDAG workflowDag;
   private Map<String, WorkflowNode> taskMapping;  // job -> wfNode (tasks have machine)
   private Map<String, String> trackerMapping;  // trackerName -> machineType
+  private WorkflowPrioritizer prioritizer;
 
   // For match functions.
   private long currentTime = 0;
   private Map<TableKey, TableEntry> table;
   private Queue<SchedulingEvent> scheduleEvents;
 
-  // For getExecutableJobs.
-  // finishedJobs -> executableJobs.
-  private Map<Collection<String>, List<String>> executableJobMap;
-
   public ProgressBasedSchedulingPlan() {
     taskMapping = new HashMap<String, WorkflowNode>();
     scheduleEvents = new PriorityQueue<SchedulingEvent>();
-    executableJobMap = new HashMap<Collection<String>, List<String>>();
   }
 
   @Override
@@ -192,6 +157,8 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
 
     // Get the most expensive machine for scheduling, the fastest machine.
     // We assume cost & execution time are inversely proportional.
+    // TODO: as plan is made should select whatever machine would be available
+    // at that time.
     MachineType fastestMachine = null;
     for (MachineType type : machineTypes) {
       if (fastestMachine == null
@@ -200,15 +167,13 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       }
     }
 
-    // Keep track of the finished workflowNodes.
-    Collection<WorkflowNode> finishedJobs = new HashSet<WorkflowNode>();
-
     // Get the workflow DAG corresponding to the workflow configuration, &c.
     workflowDag = WorkflowDAG.construct(machineTypes, machines, workflow);
     LOG.info("Constructed WorkflowDAG.");
     
     // Prioritize the jobs/nodes in the workflow dag by our criterion.
-    // TODO
+    // TODO: reflection to select whatever prioritizer concrete type
+    prioritizer = new HighestLevelFirstPrioritizer(workflowDag);
 
     // Construct a map to hold the number of unscheduled tasks.
     // jobname -> number of unscheduled tasks
@@ -238,11 +203,9 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     mapQueue.add(new FreeEvent(0, totalMapSlots, 0));
     redQueue.add(new FreeEvent(0, 0, totalRedSlots));
 
-    // Custom priority queue based on job priority metric,
-    // determines next jobs to execute.
-    // TODO: get starting nodes in order from prioritization
-    Queue<AddEvent> addQueue = new PriorityQueue<AddEvent>();
-    addQueue.addAll(createAddEvents(0, new ArrayList<WorkflowNode>(workflowDag.getEntryNodes())));
+    // The job priority metric determines the first/next jobs to execute.
+    Queue<WorkflowNode> addQueue = new PriorityQueue<WorkflowNode>(11, prioritizer);
+    addQueue.addAll(prioritizer.getExecutableJobs(new HashSet<WorkflowNode>()));
 
     long currentTime = 0L;
     int freeMapSlots = 0;
@@ -260,17 +223,16 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
         freeRedSlots += redQueue.poll().freedRedSlots;
       }
 
-      Set<AddEvent> unfinishedAddEvents = new HashSet<AddEvent>();
-      Queue<AddEvent> addRedQueue = new PriorityQueue<AddEvent>(); // TODO: custom comparator here for priorities
-      Queue<AddEvent> addSuccQueue = new PriorityQueue<AddEvent>(); // TODO: custom comparator here for priorities
+      Set<WorkflowNode> unfinishedJobs = new HashSet<WorkflowNode>();
+      Queue<WorkflowNode> addRedQueue = new PriorityQueue<WorkflowNode>(11, prioritizer);
+      Queue<WorkflowNode> addSuccQueue = new PriorityQueue<WorkflowNode>(11, prioritizer);
 
       // While there exist free slots AND we've not seen all jobs,
       // schedule tasks starting from high priority jobs.
       while (freeMapSlots > 0 && !addQueue.isEmpty()) {
 
         // Get the next highest priority job.
-        AddEvent addEvent = addQueue.poll();
-        WorkflowNode job = addEvent.job;
+        WorkflowNode job = addQueue.poll();
         String jobName = job.getJobName();
 
         // If the job has map tasks then schedule as many possible.
@@ -282,7 +244,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
           int remainingMaps = numMapTasks - mapsToSchedule;
 
           // More tasks need to be scheduled after time is advanced.
-          if (remainingMaps > 0) { unfinishedAddEvents.add(addEvent); }
+          if (remainingMaps > 0) { unfinishedJobs.add(job); }
 
           // Update the number of available slots and the task count for the job.
           mapTasks.put(jobName, remainingMaps);
@@ -301,7 +263,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
         // If the job doesn't have map tasks to schedule then we want
         // to schedule reduce events (at the current time).
         else {
-          addRedQueue.add(addEvent);
+          addRedQueue.add(job);
         }
       }
 
@@ -312,8 +274,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       while (freeRedSlots > 0 && !addRedQueue.isEmpty()) {
 
         // Get the next highest priority job.
-        AddEvent addEvent = addRedQueue.poll();
-        WorkflowNode job = addEvent.job;
+        WorkflowNode job = addRedQueue.poll();
         String jobName = job.getJobName();
 
         // If the job has reduce tasks then schedule as many as possible.
@@ -325,7 +286,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
           int remainingReds = numRedTasks - redsToSchedule;
 
           // More tasks need to be scheduled after time is advanced.
-          if (remainingReds > 0) { unfinishedAddEvents.add(addEvent); }
+          if (remainingReds > 0) { unfinishedJobs.add(job); }
 
           // Update the number of available slots and the task count for the job.
           redTasks.put(jobName, remainingReds);
@@ -344,29 +305,19 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
         // If the job doesn't have reduce tasks then we want to add its
         // successors to the collection of executable jobs.
         else {
-          addSuccQueue.add(addEvent);
+          addSuccQueue.add(job);
         }
       }
 
       // Add any successor jobs.
-      // TODO: how to do this?
-      // --> each set of new eligible jobs need to start after the just finished event
-      // --> keep map of eligible job to just finished events
-      // --> starts at latest? earliest? time of all finished events
-      // .....
-      Set<WorkflowNode> eligibleJobs = new HashSet<WorkflowNode>();
-      while (!addSuccQueue.isEmpty()) {
-        WorkflowNode job = addSuccQueue.poll().job;
-        finishedJobs.add(job);
-        eligibleJobs.addAll(getEligibleJobs(finishedJobs, job));
-      }
-      if (!eligibleJobs.isEmpty()) {
-        // TODO: priorities how?
-        addQueue.addAll(createAddEvents(0, new ArrayList<WorkflowNode>(eligibleJobs)));
-      }
+      Set<WorkflowNode> finishedJobs = new HashSet<WorkflowNode>(
+          Arrays.asList(addSuccQueue.toArray(new WorkflowNode[0])));
+
+      List<WorkflowNode> eligibleJobs = prioritizer.getExecutableJobs(finishedJobs);
+      if (!eligibleJobs.isEmpty()) { addQueue.addAll(eligibleJobs); }
 
       // Add all of the jobs which still have tasks to run back to the queue.
-      addQueue.addAll(unfinishedAddEvents);
+      addQueue.addAll(unfinishedJobs);
 
       // Advance the current time to the minimum of free slot event times.
       // TODO: Shouldn't be a case where both are null.
@@ -403,33 +354,6 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       }
       if (setTasks == numTasks) { break; }
     }
-  }
-
-  // Get the successor jobs of a node that are eligible for execution given a
-  // collection of finished jobs.
-  // TODO: priorities
-  private List<WorkflowNode> getEligibleJobs(
-      Collection<WorkflowNode> finishedJobs, WorkflowNode node) {
-
-    List<WorkflowNode> eligibleJobs = new ArrayList<WorkflowNode>();
-
-    for (WorkflowNode succ : workflowDag.getSuccessors(node)) {
-      boolean eligible = true;
-      for (WorkflowNode dep : workflowDag.getPredecessors(succ)) {
-        if (!finishedJobs.contains(dep)) { eligible = false; }
-      }
-      if (eligible) { eligibleJobs.add(succ); }
-    }
-
-    executableJobMap.put(nodesToNames(finishedJobs), nodesToNames(eligibleJobs));
-    return eligibleJobs;
-  }
-
-  // TODO: Enable priorities.
-  private List<String> nodesToNames(Collection<WorkflowNode> nodes) {
-    List<String> nodeNames = new ArrayList<String>();
-    for (WorkflowNode node : nodes) { nodeNames.add(node.getJobName()); }
-    return nodeNames;
   }
 
   @Override
@@ -530,23 +454,10 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
 
   @Override
   public List<String> getExecutableJobs(Collection<String> finishedJobs) {
-
-    List<String> executableJobs = new ArrayList<String>();
-
-    // If there are no finished jobs then return the entry nodes.
-    if (finishedJobs == null || finishedJobs.size() == 0) {
-      for (WorkflowNode node : workflowDag.getEntryNodes()) {
-        executableJobs.add(node.getJobName());
-      }
-      LOG.info("No jobs finished, returning the set of entry jobs.");
-      return executableJobs;
-    }
-
-    // TODO: It works... maybe should use some sort of test against contained
-    // elements rather than a whole set check though.
     LOG.info("Got as finished jobs: " + finishedJobs.toString());
-    LOG.info("Returned as executable jobs: " + executableJobMap.get(finishedJobs).toString());
-    return executableJobMap.get(finishedJobs);
+    List<String> executableJobs = prioritizer.getExecutableJobs(finishedJobs);
+    LOG.info("Returned as executable jobs: " + executableJobs);
+    return executableJobs;
   }
 
   @Override
@@ -577,6 +488,10 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       trackerMapping.put(key, value);
     }
 
+    // TODO: reflection to select whatever prioritizer concrete type
+    prioritizer = new HighestLevelFirstPrioritizer();
+    prioritizer.readFields(in);
+
     // For match functions.
     currentTime = in.readLong();
 
@@ -595,18 +510,6 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       key.readFields(in);
       entry.readFields(in);
       table.put(key, entry);
-    }
-
-    // For getExecutableJobs.
-    int numJobEntries = in.readInt();
-    for (int i = 0; i < numJobEntries; i++) {
-      Collection<String> key = new HashSet<String>();
-      List<String> value = new ArrayList<String>();
-      int keySize = in.readInt();
-      int valueSize = in.readInt();
-      for (int j = 0; j < keySize; j++) { key.add(Text.readString(in)); }
-      for (int j = 0; j < valueSize; j++) { value.add(Text.readString(in)); }
-       executableJobMap.put(key, value); 
     }
   }
 
@@ -628,6 +531,8 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       Text.writeString(out, trackerMapping.get(key));
     }
 
+    prioritizer.write(out);
+
     // For match functions.
     out.writeLong(currentTime);
 
@@ -638,16 +543,6 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     for (TableKey key : table.keySet()) {
       key.write(out);
       table.get(key).write(out);
-    }
-
-    // For getExecutableJobs.
-    out.writeInt(executableJobMap.size());
-    for (Collection<String> key : executableJobMap.keySet()) {
-      Collection<String> value = executableJobMap.get(key);
-      out.writeInt(key.size());
-      out.writeInt(value.size());
-      for (String keyComponent : key) { Text.writeString(out, keyComponent); }
-      for (String valueComponent : value) { Text.writeString(out, valueComponent); }
     }
   }
 
