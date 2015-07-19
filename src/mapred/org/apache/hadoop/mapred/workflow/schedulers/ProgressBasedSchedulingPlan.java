@@ -19,8 +19,10 @@ package org.apache.hadoop.mapred.workflow.schedulers;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -206,6 +208,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     // The job priority metric determines the first/next jobs to execute.
     Queue<WorkflowNode> addQueue = new PriorityQueue<WorkflowNode>(11, prioritizer);
     addQueue.addAll(prioritizer.getExecutableJobs(new HashSet<WorkflowNode>()));
+    LOG.info("The addQueue initially has " + addQueue.size() + " jobs.");
 
     long currentTime = 0L;
     int freeMapSlots = 0;
@@ -218,9 +221,11 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       FreeEvent free;
       while ((free = mapQueue.peek()) != null && free.time <= currentTime) {
         freeMapSlots += mapQueue.poll().freedMapSlots;
+        LOG.info("Added freed map slots.");
       }
       while ((free = redQueue.peek()) != null && free.time <= currentTime) {
         freeRedSlots += redQueue.poll().freedRedSlots;
+        LOG.info("Added freed reduce slots.");
       }
 
       Set<WorkflowNode> unfinishedJobs = new HashSet<WorkflowNode>();
@@ -230,10 +235,12 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       // While there exist free slots AND we've not seen all jobs,
       // schedule tasks starting from high priority jobs.
       while (freeMapSlots > 0 && !addQueue.isEmpty()) {
+        LOG.info("Looking for map tasks to schedule.");
 
         // Get the next highest priority job.
         WorkflowNode job = addQueue.poll();
         String jobName = job.getJobName();
+        LOG.info("Got next job to schedule maps for as " + jobName + ".");
 
         // If the job has map tasks then schedule as many possible.
         int numMapTasks = mapTasks.get(jobName);
@@ -242,9 +249,10 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
           // Compute the number of maps that can be scheduled.
           int mapsToSchedule = Math.min(numMapTasks, freeMapSlots);
           int remainingMaps = numMapTasks - mapsToSchedule;
+          LOG.info("Scheduling " + mapsToSchedule + " maps from job " + jobName);
 
           // More tasks need to be scheduled after time is advanced.
-          if (remainingMaps > 0) { unfinishedJobs.add(job); }
+          unfinishedJobs.add(job);
 
           // Update the number of available slots and the task count for the job.
           mapTasks.put(jobName, remainingMaps);
@@ -259,6 +267,8 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
           TableEntry entry = table.get(key);
           long freeTime = currentTime + entry.execTime;
           mapQueue.add(new FreeEvent(freeTime, mapsToSchedule, 0));
+          LOG.info("Added free event for " + mapsToSchedule
+              + " map slots at time " + freeTime + "s.");
         }
         // If the job doesn't have map tasks to schedule then we want
         // to schedule reduce events (at the current time).
@@ -272,10 +282,12 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       // Can't consider previously scheduled maps (above) without advancing
       // time, so we use a collection containing filtered add events.
       while (freeRedSlots > 0 && !addRedQueue.isEmpty()) {
+        LOG.info("Looking for reduce tasks to schedule.");
 
         // Get the next highest priority job.
         WorkflowNode job = addRedQueue.poll();
         String jobName = job.getJobName();
+        LOG.info("Got next job to schedule reduces for as " + jobName + ".");
 
         // If the job has reduce tasks then schedule as many as possible.
         int numRedTasks = redTasks.get(jobName);
@@ -284,9 +296,10 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
           // Compute the number of reduces that can be scheduled.
           int redsToSchedule = Math.min(numRedTasks, freeRedSlots);
           int remainingReds = numRedTasks - redsToSchedule;
+          LOG.info("Scheduling " + redsToSchedule + " reds from job " + jobName);
 
           // More tasks need to be scheduled after time is advanced.
-          if (remainingReds > 0) { unfinishedJobs.add(job); }
+          unfinishedJobs.add(job);
 
           // Update the number of available slots and the task count for the job.
           redTasks.put(jobName, remainingReds);
@@ -301,6 +314,8 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
           TableEntry entry = table.get(key);
           long freeTime = currentTime + entry.execTime;
           redQueue.add(new FreeEvent(freeTime, 0, redsToSchedule));
+          LOG.info("Added free event for " + redsToSchedule
+              + " reduce slots at time " + freeTime + "s.");
         }
         // If the job doesn't have reduce tasks then we want to add its
         // successors to the collection of executable jobs.
@@ -310,20 +325,32 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       }
 
       // Add any successor jobs.
-      Set<WorkflowNode> finishedJobs = new HashSet<WorkflowNode>(
-          Arrays.asList(addSuccQueue.toArray(new WorkflowNode[0])));
+      if (!addSuccQueue.isEmpty()) {
+        LOG.info("There are successors that can possibly be run.");
+        Set<WorkflowNode> finishedJobs = new HashSet<WorkflowNode>(
+            Arrays.asList(addSuccQueue.toArray(new WorkflowNode[0])));
 
-      List<WorkflowNode> eligibleJobs = prioritizer.getExecutableJobs(finishedJobs);
-      if (!eligibleJobs.isEmpty()) { addQueue.addAll(eligibleJobs); }
+        List<WorkflowNode> eligibleJobs = prioritizer.getExecutableJobs(finishedJobs);
+        if (!eligibleJobs.isEmpty()) {
+          LOG.info(("New jobs can be run: " + Arrays.toString(eligibleJobs.toArray(new WorkflowNode[0]))));
+          addQueue.addAll(eligibleJobs);
+        }
+      }
 
       // Add all of the jobs which still have tasks to run back to the queue.
       addQueue.addAll(unfinishedJobs);
+      LOG.info("Added back unfinished jobs to queue: "
+          + Arrays.toString(unfinishedJobs.toArray(new WorkflowNode[0])));
 
       // Advance the current time to the minimum of free slot event times.
-      // TODO: Shouldn't be a case where both are null.
-      long freeMap = (mapQueue.peek() == null) ? Long.MAX_VALUE : mapQueue.peek().time;
-      long freeRed = (redQueue.peek() == null) ? Long.MAX_VALUE : redQueue.peek().time;
-      currentTime = Math.min(freeMap, freeRed);
+      if (mapQueue.peek() != null || redQueue.peek() != null) {
+        long freeMap = Long.MAX_VALUE;
+        long freeRed = Long.MAX_VALUE;
+        if (mapQueue.peek() != null) { freeMap = mapQueue.peek().time; }
+        if (redQueue.peek() != null) { freeRed = redQueue.peek().time; }
+        currentTime = Math.min(freeRed, freeMap);
+        LOG.info("Updated current time to " + currentTime + ".");
+      }
     }
 
     // Set the taskMapping variable.
@@ -337,6 +364,15 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     LOG.info("Workflow total time: " + workflowDag.getTime(table));
     LOG.info("Workflow budget constraint: N/A");
     LOG.info("Workflow deadline constraint: N/A");
+
+    LOG.info("Events are as follows:");
+    List<SchedulingEvent> events = Arrays.asList(scheduleEvents.toArray(new SchedulingEvent[0]));
+    Collections.sort(events);
+    for (SchedulingEvent event : events) {
+      LOG.info(event.jobName + ": " + event.numMaps + " maps, "
+          + event.numReduces + " reduces, at " + event.time);
+    }
+    LOG.info("Done listing events.");
 
     // Not meeting any constraints, so schedule is always valid.
     return true;
@@ -359,6 +395,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
   @Override
   public boolean matchMap(String machineType, String jobName) {
     LOG.info("In matchMap function");
+    LOG.info("Current time is: " + currentTime);
 
     // Get the set of events to start at or before the current time.
     Set<SchedulingEvent> validEvents = new HashSet<SchedulingEvent>();
@@ -387,16 +424,18 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
           if (event.numMaps == 0 && event.numReduces == 0) {
             LOG.info("Event has no more tasks, removing it.");
             scheduleEvents.remove(event);
-
-            // Update time.
-            TableKey key = new TableKey(jobName, machineType, true);
-            float execTime = table.get(key).execTime;
-            if (currentTime < execTime) {
-              currentTime = (long) Math.floor(execTime);
-            }
           }
 
           return true;
+        }
+      }
+
+      // Update time if the job has no map tasks left (it is done).
+      if (tasks.isEmpty()) {
+        TableKey key = new TableKey(jobName, machineType, false);
+        float execTime = table.get(key).execTime;
+        if (currentTime < execTime) {
+          currentTime = (long) Math.floor(execTime);
         }
       }
     }
@@ -407,6 +446,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
   @Override
   public boolean matchReduce(String machineType, String jobName) {
     LOG.info("In matchReduce function");
+    LOG.info("Current time is: " + currentTime);
 
     // Get the set of events to start at or before the current time.
     Set<SchedulingEvent> validEvents = new HashSet<SchedulingEvent>();
@@ -435,16 +475,18 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
           if (event.numMaps == 0 && event.numReduces == 0) {
             LOG.info("Event has no more tasks, removing it.");
             scheduleEvents.remove(event);
-
-            // Update time.
-            TableKey key = new TableKey(jobName, machineType, false);
-            float execTime = table.get(key).execTime;
-            if (currentTime < execTime) {
-              currentTime = (long) Math.floor(execTime);
-            }
           }
 
           return true;
+        }
+      }
+
+      // Update time if the job has no reduce tasks left (it is done).
+      if (tasks.isEmpty()) {
+        TableKey key = new TableKey(jobName, machineType, false);
+        float execTime = table.get(key).execTime;
+        if (currentTime < execTime) {
+          currentTime = (long) Math.floor(execTime);
         }
       }
     }
@@ -454,10 +496,23 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
 
   @Override
   public List<String> getExecutableJobs(Collection<String> finishedJobs) {
-    LOG.info("Got as finished jobs: " + finishedJobs.toString());
-    List<String> executableJobs = prioritizer.getExecutableJobs(finishedJobs);
-    LOG.info("Returned as executable jobs: " + executableJobs);
-    return executableJobs;
+
+    // Get the set of events to start at or before the current time.
+    Set<SchedulingEvent> validEvents = new HashSet<SchedulingEvent>();
+    List<String> validEventNames = new ArrayList<String>();
+    while (scheduleEvents.peek().time <= currentTime) {
+      SchedulingEvent event = scheduleEvents.poll();
+      validEventNames.add(event.jobName);
+      validEvents.add(event);
+    }
+    scheduleEvents.addAll(validEvents);
+    LOG.info("Valid events are: " + Arrays.toString(validEvents.toArray(new SchedulingEvent[0])));
+
+    //LOG.info("Got as finished jobs: " + finishedJobs.toString());
+    //List<String> executableJobs = prioritizer.getExecutableJobs(finishedJobs);
+    //executableJobs.removeAll(validEventNames);
+    //LOG.info("Returned as executable jobs: " + executableJobs);
+    return validEventNames;
   }
 
   @Override
@@ -471,6 +526,11 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     // For generatePlan & class itself.
     workflowDag = new WorkflowDAG();
     workflowDag.readFields(in);
+
+    // TODO: reflection to select whatever prioritizer concrete type
+    prioritizer = new HighestLevelFirstPrioritizer();
+    prioritizer.setWorkflowDag(workflowDag);
+    prioritizer.readFields(in);
 
     int numTaskMappings = in.readInt();
     for (int i = 0; i < numTaskMappings; i++) {
@@ -487,10 +547,6 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       String value = Text.readString(in);
       trackerMapping.put(key, value);
     }
-
-    // TODO: reflection to select whatever prioritizer concrete type
-    prioritizer = new HighestLevelFirstPrioritizer();
-    prioritizer.readFields(in);
 
     // For match functions.
     currentTime = in.readLong();
@@ -518,6 +574,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
 
     // For generatePlan & class itself.
     workflowDag.write(out);
+    prioritizer.write(out);
 
     out.writeInt(taskMapping.size());
     for (String key : taskMapping.keySet()) {
@@ -530,8 +587,6 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       Text.writeString(out, key);
       Text.writeString(out, trackerMapping.get(key));
     }
-
-    prioritizer.write(out);
 
     // For match functions.
     out.writeLong(currentTime);

@@ -168,6 +168,7 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           // TODO: what happens if task isn't null but sched. returns false?
           // If schedulingPlan.match() is true then we HAVE to schedule.
           if (availableMapSlots > 0) {
+            LOG.info("Map slots are available.");
             Task task = job.obtainNewMapTask(tts, clusterSize, uniqueHosts);
             if (task != null && schedulingPlan.matchMap(machineType, jobName)) {
               assignedTasks.add(task);
@@ -184,6 +185,7 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           // TODO: what happens if task isn't null but sched. returns false?
           // If schedulingPlan.match() is true then we HAVE to schedule.
           if (availableReduceSlots > 0) {
+            LOG.info("Reduce slots are available.");
             Task task = job.obtainNewReduceTask(tts, clusterSize, uniqueHosts);
             if (task != null && schedulingPlan.matchReduce(machineType, jobName)) {
               assignedTasks.add(task);
