@@ -132,7 +132,7 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
 
           JobInProgress job = (JobInProgress) object;
           if (job.getStatus().getRunState() != JobStatus.RUNNING) { continue; }
-          LOG.info("Got job from queue.");
+          LOG.info("Got job " + job.getJobConf().getJobName() + " from queue.");
 
           // Check & get the scheduling plan for the workflow.
           WorkflowID workflowId = job.getStatus().getWorkflowId();
@@ -165,12 +165,16 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           final int runningMaps = tts.countMapTasks();
           final int availableMapSlots = mapCapacity - runningMaps;
 
-          // TODO: what happens if task isn't null but sched. returns false?
-          // If schedulingPlan.match() is true then we HAVE to schedule.
-          if (availableMapSlots > 0) {
-            LOG.info("Map slots are available.");
+          // Check if a task can be executed, and if so run it.
+          if (availableMapSlots > 0
+              && schedulingPlan.matchMap(machineType, jobName)) {
+            LOG.info("Map slots are available, and map can be run.");
+
             Task task = job.obtainNewMapTask(tts, clusterSize, uniqueHosts);
-            if (task != null && schedulingPlan.matchMap(machineType, jobName)) {
+            LOG.info("Obtained map task is " + (task == null ? "null." : "not null."));
+
+            if (task != null) {
+              schedulingPlan.runMap(machineType, jobName);
               assignedTasks.add(task);
               LOG.info("Assigning map task " + task.toString() + ".");
             }
@@ -182,12 +186,16 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           final int runningReduces = tts.countReduceTasks();
           final int availableReduceSlots = reduceCapacity - runningReduces;
 
-          // TODO: what happens if task isn't null but sched. returns false?
-          // If schedulingPlan.match() is true then we HAVE to schedule.
-          if (availableReduceSlots > 0) {
-            LOG.info("Reduce slots are available.");
+          // Check if a task can be executed, and if so run it.
+          if (availableReduceSlots > 0
+              && schedulingPlan.matchReduce(machineType, jobName)) {
+            LOG.info("Reduce slots are available, and reduce can be run.");
+
             Task task = job.obtainNewReduceTask(tts, clusterSize, uniqueHosts);
-            if (task != null && schedulingPlan.matchReduce(machineType, jobName)) {
+            LOG.info("Obtained reduce task is " + (task == null ? "null." : "not null."));
+
+            if (task != null) {
+              schedulingPlan.runReduce(machineType, jobName);
               assignedTasks.add(task);
               LOG.info("Assigning reduce task " + task.toString() + ".");
             }

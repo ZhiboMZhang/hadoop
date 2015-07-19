@@ -140,7 +140,6 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     // Get a sorted list of machine types by cost/unit time.
     List<MachineType> sortedMachines = new ArrayList<MachineType>(machineTypes);
     Collections.sort(sortedMachines, WorkflowUtil.MACHINE_TYPE_COST_ORDER);
-
     LOG.info("Sorted Machine Types.");
     WorkflowUtil.printMachineTypesInfo(sortedMachines);
 
@@ -148,7 +147,12 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     workflowDag = WorkflowDAG.construct(machineTypes, machines, workflow);
     LOG.info("Constructed WorkflowDAG.");
 
-    // Set all machines to use the least expensive machine type.
+    for (WorkflowNode node : workflowDag.getNodes()) {
+      taskMapping.put(node.getJobName(), node);
+      LOG.info("Added pair: " + node.getJobName() + "/" + node);
+    }
+
+    // Initially set all machines to use the least expensive machine type.
     for (WorkflowNode node : workflowDag.getNodes()) {
       for (WorkflowTask task : node.getTasks()) {
         task.setMachineType(sortedMachines.get(0).getName());
@@ -261,11 +265,6 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     // WorkflowNode represents a task to be executed (WorkflowNodes are
     // repeated).
 
-    for (WorkflowNode node : workflowDag.getNodes()) {
-      taskMapping.put(node.getJobName(), node);
-      LOG.info("Added pair: " + node.getJobName() + "/" + node);
-    }
-
     // Inform the user about the schedule.
     LOG.info("!!! Simulation complete. !!!");
     LOG.info("Workflow total cost: " + workflowDag.getCost(table));
@@ -348,19 +347,16 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
         / (slowestNewCost - slowestCurCost);
   }
 
-  @Override
-  public boolean matchMap(String machineType, String jobName) {
-    LOG.info("In matchMap function");
-    return match(machineType, jobName, TaskType.MAP);
-  }
-
-  @Override
-  public boolean matchReduce(String machineType, String jobName) {
-    LOG.info("In matchReduce function");
-    return match(machineType, jobName, TaskType.REDUCE);
-  }
-
-  private boolean match(String machineType, String jobName, TaskType taskType) {
+  /**
+   * Execute (or test) a task from a job on a particular machine.
+   *
+   * @param machineType The type of machine to run the task on.
+   * @param jobName The job that the task belongs to.
+   * @param taskType The task type: map, or reduce.
+   * @param isDryRun Whether the scheduling should be executed or not.
+   */
+  private boolean runTask(String machineType, String jobName,
+      TaskType taskType, boolean isDryRun) {
 
     Collection<WorkflowTask> tasks = taskMapping.get(jobName).getTasks();
 
@@ -372,16 +368,38 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
       LOG.info("Match input is " + machineType + "/" + jobName + "/" + taskType);
       LOG.info("vs: " + machine + "/" + name + "/" + type);
 
-      if (machine.equals(machineType) && name.equals(jobName)
-          && type.equals(taskType)) {
+      if (machine.equals(machineType) && name.equals(jobName) && type.equals(taskType)) {
         LOG.info("Found a match!");
-        // Assume task will be successful when executed.
-        tasks.remove(task);
+        if (!isDryRun) { tasks.remove(task); }
 
         return true;
       }
     }
     return false;
+  }
+
+  @Override
+  public boolean matchMap(String machineType, String jobName) {
+    LOG.info("In matchMap function.");
+    return runTask(machineType, jobName, TaskType.MAP, true);
+  }
+
+  @Override
+  public boolean runMap(String machineType, String jobName) {
+    LOG.info("In runMap function.");
+    return runTask(machineType, jobName, TaskType.MAP, false);
+  }
+
+  @Override
+  public boolean matchReduce(String machineType, String jobName) {
+    LOG.info("In matchReduce function.");
+    return runTask(machineType, jobName, TaskType.REDUCE, true);
+  }
+
+  @Override
+  public boolean runReduce(String machineType, String jobName) {
+    LOG.info("In runReduce function.");
+    return runTask(machineType, jobName, TaskType.REDUCE, false);
   }
 
   @Override
@@ -417,19 +435,13 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
       prevFinishedJobs.addAll(finishedJobs);
     }
 
-    // TODO: better
-    Map<String, WorkflowNode> map = new HashMap<String, WorkflowNode>();
-    for (WorkflowNode node : workflowDag.getNodes()) {
-      map.put(node.getJobName(), node);
-    }
-
     // A successor of a finished job is eligible for execution if all of its
     // dependencies are finished.
     for (String job : finishedJobs) {
 
       LOG.info("Checking to add successors of job " + job + ".");
 
-      for (WorkflowNode successor : workflowDag.getSuccessors(map.get(job))) {
+      for (WorkflowNode successor : workflowDag.getSuccessors(taskMapping.get(job))) {
         LOG.info("Checking eligibility of successor " + successor.getJobName() + ".");
         boolean eligible = true;
 
@@ -463,12 +475,9 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     workflowDag = new WorkflowDAG();
     workflowDag.readFields(in);
 
-    int numTaskMappings = in.readInt();
-    for (int i = 0; i < numTaskMappings; i++) {
-      String key = Text.readString(in);
-      WorkflowNode value = new WorkflowNode();
-      value.readFields(in);
-      taskMapping.put(key, value);
+    // Set the taskMapping variable.
+    for (WorkflowNode node : workflowDag.getNodes()) {
+      taskMapping.put(node.getJobName(), node);
     }
 
     trackerMapping = new HashMap<String, String>();
@@ -494,12 +503,6 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
   public void write(DataOutput out) throws IOException {
 
     workflowDag.write(out);
-
-    out.writeInt(taskMapping.size());
-    for (String key : taskMapping.keySet()) {
-      Text.writeString(out, key);
-      taskMapping.get(key).write(out);
-    }
 
     out.writeInt(trackerMapping.size());
     for (String key : trackerMapping.keySet()) {

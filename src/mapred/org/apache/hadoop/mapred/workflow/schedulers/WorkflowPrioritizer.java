@@ -1,6 +1,5 @@
 package org.apache.hadoop.mapred.workflow.schedulers;
 
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -26,14 +25,6 @@ abstract class WorkflowPrioritizer implements Writable,
    * This function is called during generation of the scheduling plan.
    */
   public abstract List<WorkflowNode> getExecutableJobs(Set<WorkflowNode> finishedJobs);
-
-  /**
-   * Given a collection of ALL finished jobs, return a prioritized list of newly
-   * executable jobs.
-   *
-   * This function is called during execution of the scheduling plan.
-   */
-  public abstract List<String> getExecutableJobs(Collection<String> finishedJobs);
 
   /**
    * Order jobs according to the current priority metric.

@@ -46,9 +46,9 @@ import org.apache.hadoop.mapred.workflow.scheduling.WorkflowDAG;
 import org.apache.hadoop.mapred.workflow.scheduling.WorkflowNode;
 import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingPlan;
 import org.apache.hadoop.mapred.workflow.scheduling.WorkflowTask;
+import org.apache.hadoop.mapreduce.TaskType;
 
 // A custom scheduler is not needed as we only deal with one workflow at a time.
-//
 public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
 
   private class SchedulingEvent implements Comparable<SchedulingEvent>,
@@ -128,14 +128,16 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
   private Map<String, String> trackerMapping;  // trackerName -> machineType
   private WorkflowPrioritizer prioritizer;
 
-  // For match functions.
-  private long currentTime = 0;
+  // For match & executable job functions.
   private Map<TableKey, TableEntry> table;
   private Queue<SchedulingEvent> scheduleEvents;
+  private long currentTime = 0;
+  private Set<String> finishedJobs;
 
   public ProgressBasedSchedulingPlan() {
     taskMapping = new HashMap<String, WorkflowNode>();
     scheduleEvents = new PriorityQueue<SchedulingEvent>();
+    finishedJobs = new HashSet<String>();
   }
 
   @Override
@@ -172,6 +174,11 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     // Get the workflow DAG corresponding to the workflow configuration, &c.
     workflowDag = WorkflowDAG.construct(machineTypes, machines, workflow);
     LOG.info("Constructed WorkflowDAG.");
+
+    // Set the taskMapping variable.
+    for (WorkflowNode node : workflowDag.getNodes()) {
+      taskMapping.put(node.getJobName(), node);
+    }
     
     // Prioritize the jobs/nodes in the workflow dag by our criterion.
     // TODO: reflection to select whatever prioritizer concrete type
@@ -274,7 +281,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
         // to schedule reduce events (at the current time).
         else {
           // TODO: join so more even split between map & reduce
-          // TODO: rather than all map happening before reduces start
+          // rather than all map happening before reduces start
           addRedQueue.add(job);
         }
       }
@@ -355,11 +362,6 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       }
     }
 
-    // Set the taskMapping variable.
-    for (WorkflowNode node : workflowDag.getNodes()) {
-      taskMapping.put(node.getJobName(), node);
-    }
-
     // Inform the user about the schedule.
     LOG.info("!!! Simulation complete. !!!");
     LOG.info("Workflow total cost: " + workflowDag.getCost(table));
@@ -394,9 +396,17 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     }
   }
 
-  @Override
-  public boolean matchMap(String machineType, String jobName) {
-    LOG.info("In matchMap function");
+  /**
+   * Execute (or test) a task from a job on a particular machine.
+   *
+   * @param machineType The type of machine to run the task on.
+   * @param jobName The job that the task belongs to.
+   * @param taskType The task type: map, or reduce.
+   * @param isDryRun Whether the scheduling should be executed or not.
+   */
+  private boolean runTask(String machineType, String jobName,
+      TaskType taskType, boolean isDryRun) {
+    LOG.info("In runTask function (" + jobName + ").");
     LOG.info("Current time is: " + currentTime);
 
     // Get the set of events to start at or before the current time.
@@ -409,31 +419,43 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
 
     // Find a job add/execution that matches.
     for (SchedulingEvent event : validEvents) {
-      // Event must have maps to still be in the requirement list.
-      if (event.numMaps == 0) { continue; }
+      // Event must have tasks to still be in the requirement list.
+      if (taskType == TaskType.MAP && event.numMaps == 0) { continue; }
+      if (taskType == TaskType.REDUCE && event.numReduces == 0) { continue; }
       if (!event.jobName.equals(jobName)) { continue; }
+      LOG.info("Event " + event + " matches queued job & has tasks to be run.");
 
-      LOG.info("Event " + event + " matches queued job & has maps to be run.");
-      Collection<WorkflowTask> tasks = taskMapping.get(jobName).getMapTasks();
+      // Get the tasks from the job.
+      Collection<WorkflowTask> tasks = null;
+      WorkflowNode job = taskMapping.get(jobName);
+      if (taskType == TaskType.MAP) { tasks = job.getMapTasks(); }
+      if (taskType == TaskType.REDUCE) { tasks = job.getReduceTasks(); }
 
       // Find a task that is supposed to run on the given machine type.
       for (WorkflowTask task : tasks) {
         if (machineType.equals(task.getMachineType())) {
           LOG.info("Found a match: " + task);
-          event.numMaps--;
-          tasks.remove(task);
 
-          if (event.numMaps == 0 && event.numReduces == 0) {
-            LOG.info("Event has no more tasks, removing it.");
-            scheduleEvents.remove(event);
-          }
+          if (!isDryRun) {
+            // Don't update structures if this is a dry-run check/test.
+            if (taskType == TaskType.MAP) { event.numMaps--; }
+            if (taskType == TaskType.REDUCE) { event.numReduces--; }
+            tasks.remove(task);
 
-          // Update time if the job has no map tasks left (it is done).
-          if (tasks.isEmpty()) {
-            TableKey key = new TableKey(jobName, machineType, false);
-            float execTime = table.get(key).execTime;
-            if (currentTime < event.time + execTime) {
-              currentTime = (long) Math.ceil(event.time + execTime);
+            // Remove the event if it has no more tasks to be scheduled.
+            if (event.numMaps == 0 && event.numReduces == 0) {
+              LOG.info("Event has no more tasks, removing it.");
+              scheduleEvents.remove(event);
+            }
+
+            // Update time if the job has no map tasks left (it is done).
+            if (tasks.isEmpty()) {
+              LOG.info("Job has no more tasks, updating time.");
+              TableKey key = new TableKey(jobName, machineType, false);
+              float execTime = table.get(key).execTime;
+              if (currentTime < event.time + execTime) {
+                currentTime = (long) Math.ceil(event.time + execTime);
+              }
             }
           }
 
@@ -446,64 +468,39 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
   }
 
   @Override
+  public boolean matchMap(String machineType, String jobName) {
+    LOG.info("In matchMap function.");
+    return runTask(machineType, jobName, TaskType.MAP, true);
+  }
+
+  @Override
+  public boolean runMap(String machineType, String jobName) {
+    LOG.info("In runMap function.");
+    return runTask(machineType, jobName, TaskType.MAP, false);
+  }
+
+  @Override
   public boolean matchReduce(String machineType, String jobName) {
-    LOG.info("In matchReduce function");
-    LOG.info("Current time is: " + currentTime);
+    LOG.info("In matchReduce function.");
+    return runTask(machineType, jobName, TaskType.REDUCE, true);
+  }
 
-    // Get the set of events to start at or before the current time.
-    Set<SchedulingEvent> validEvents = new HashSet<SchedulingEvent>();
-    while (scheduleEvents.peek().time <= currentTime) {
-      validEvents.add(scheduleEvents.poll());
-    }
-    scheduleEvents.addAll(validEvents);
-    LOG.info("Valid events are: " + Arrays.toString(validEvents.toArray(new SchedulingEvent[0])));
-
-    // Find a job add/execution that matches.
-    for (SchedulingEvent event : validEvents) {
-      // Event must have reduces to still be in the requirement list.
-      if (event.numReduces == 0) { continue; }
-      if (!event.jobName.equals(jobName)) { continue; }
-
-      LOG.info("Event " + event + " matches queued job & has reduces to be run.");
-      Collection<WorkflowTask> tasks = taskMapping.get(jobName).getReduceTasks();
-
-      // Find a task that is supposed to run on the given machine type.
-      for (WorkflowTask task : tasks) {
-        if (machineType.equals(task.getMachineType())) {
-          LOG.info("Found a match: " + task);
-          event.numReduces--;
-          tasks.remove(task);
-
-          if (event.numMaps == 0 && event.numReduces == 0) {
-            LOG.info("Event has no more tasks, removing it.");
-            scheduleEvents.remove(event);
-          }
-
-          // Update time if the job has no reduce tasks left (it is done).
-          if (tasks.isEmpty()) {
-            TableKey key = new TableKey(jobName, machineType, false);
-            float execTime = table.get(key).execTime;
-            if (currentTime < event.time + execTime) {
-              currentTime = (long) Math.ceil(event.time + execTime);
-            }
-          }
-
-          return true;
-        }
-      }
-    }
-
-    return false;
+  @Override
+  public boolean runReduce(String machineType, String jobName) {
+    LOG.info("In runReduce function.");
+    return runTask(machineType, jobName, TaskType.REDUCE, false);
   }
 
   @Override
   public List<String> getExecutableJobs(Collection<String> finishedJobs) {
 
+    LOG.info("Got as finished jobs: " + finishedJobs.toString());
+    this.finishedJobs.addAll(finishedJobs);
+
     // Get the set of events to start at or before the current time.
     Set<SchedulingEvent> validEvents = new HashSet<SchedulingEvent>();
     List<String> validEventNames = new ArrayList<String>();
-    // TODO: i definitely need to take into account dependencies,
-    // TODO: so that jobs don't start until all deps are finished.
+
     while (scheduleEvents.peek().time <= currentTime) {
       SchedulingEvent event = scheduleEvents.poll();
       validEventNames.add(event.jobName);
@@ -512,10 +509,26 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     scheduleEvents.addAll(validEvents);
     LOG.info("Valid events are: " + Arrays.toString(validEvents.toArray(new SchedulingEvent[0])));
 
-    //LOG.info("Got as finished jobs: " + finishedJobs.toString());
-    //List<String> executableJobs = prioritizer.getExecutableJobs(finishedJobs);
-    //executableJobs.removeAll(validEventNames);
-    //LOG.info("Returned as executable jobs: " + executableJobs);
+    // Ensure jobs with incomplete dependencies aren't returned.
+    Iterator<String> validEventNamesIterator = validEventNames.iterator();
+    while (validEventNamesIterator.hasNext()) {
+      String event = validEventNamesIterator.next();
+      LOG.info("Getting deps of job " + event);
+      WorkflowNode eventNode = taskMapping.get(event);
+      Set<WorkflowNode> predecessors = workflowDag.getPredecessors(eventNode);
+      LOG.info("Deps are " + Arrays.toString(predecessors.toArray(new WorkflowNode[0])));
+      Set<String> predecessorNames = new HashSet<String>();
+      for (WorkflowNode node : predecessors) {
+        predecessorNames.add(node.getJobName());
+      }
+      // We can't execute a job until all its predecessors are complete.
+      if (!this.finishedJobs.containsAll(predecessorNames)) {
+        LOG.info("Predecessors of " + event + " are not all finished, removing it.");
+        validEventNamesIterator.remove();
+      }
+    }
+    LOG.info("Returned as executable jobs: " + validEventNames);
+
     return validEventNames;
   }
 
@@ -531,18 +544,15 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     workflowDag = new WorkflowDAG();
     workflowDag.readFields(in);
 
+    // Set the taskMapping variable.
+    for (WorkflowNode node : workflowDag.getNodes()) {
+      taskMapping.put(node.getJobName(), node);
+    }
+
     // TODO: reflection to select whatever prioritizer concrete type
     prioritizer = new HighestLevelFirstPrioritizer();
     prioritizer.setWorkflowDag(workflowDag);
     prioritizer.readFields(in);
-
-    int numTaskMappings = in.readInt();
-    for (int i = 0; i < numTaskMappings; i++) {
-      String key = Text.readString(in);
-      WorkflowNode value = new WorkflowNode();
-      value.readFields(in);
-      taskMapping.put(key, value);
-    }
 
     trackerMapping = new HashMap<String, String>();
     int numTrackerMappings = in.readInt();
@@ -571,6 +581,11 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       entry.readFields(in);
       table.put(key, entry);
     }
+
+    int numFinishedJobs = in.readInt();
+    for (int i = 0; i < numFinishedJobs; i++) {
+      finishedJobs.add(Text.readString(in));
+    }
   }
 
   @Override
@@ -579,12 +594,6 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     // For generatePlan & class itself.
     workflowDag.write(out);
     prioritizer.write(out);
-
-    out.writeInt(taskMapping.size());
-    for (String key : taskMapping.keySet()) {
-      Text.writeString(out, key);
-      taskMapping.get(key).write(out);
-    }
 
     out.writeInt(trackerMapping.size());
     for (String key : trackerMapping.keySet()) {
@@ -603,6 +612,9 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       key.write(out);
       table.get(key).write(out);
     }
+
+    out.writeInt(finishedJobs.size());
+    for (String job : finishedJobs) { Text.writeString(out, job); }
   }
 
 }

@@ -4,7 +4,6 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,7 +34,6 @@ class HighestLevelFirstPrioritizer extends WorkflowPrioritizer {
   Map<WorkflowNode, Integer> priorities = new HashMap<WorkflowNode, Integer>();
   Map<String, WorkflowNode> jobNameMap = new HashMap<String, WorkflowNode>();
   Set<WorkflowNode> planningFinishedJobs = new HashSet<WorkflowNode>();
-  Set<String> executionFinishedJobs = new HashSet<String>();
 
   /** Only to be used when calling readFields(). */
   HighestLevelFirstPrioritizer() {}
@@ -130,62 +128,8 @@ class HighestLevelFirstPrioritizer extends WorkflowPrioritizer {
   }
 
   @Override
-  @Deprecated
-  // Runs during plan execution.
-  public List<String> getExecutableJobs(Collection<String> finishedJobs) {
-
-    List<String> executableJobs = new ArrayList<String>();
-
-    // If no jobs are finished.
-    if (finishedJobs == null || finishedJobs.isEmpty()) {
-      LOG.info("No finished jobs, returning entry nodes.");
-      List<WorkflowNode> executableNodes = new ArrayList<WorkflowNode>();
-      executableNodes.addAll(workflowDag.getEntryNodes());
-      Collections.sort(executableNodes, this);
-
-      for (WorkflowNode node : executableNodes) {
-        executableJobs.add(node.getJobName());
-      }
-
-      return executableJobs;
-    }
-
-    // If all jobs are finished, return an empty list.
-    if (finishedJobs.size() == workflowDag.getNodes().size()) {
-      LOG.info("All jobs finished, returning empty set.");
-      return executableJobs;
-    }
-
-    finishedJobs.removeAll(executionFinishedJobs);
-    executionFinishedJobs.addAll(finishedJobs);
-
-    // A successor of a finished job is eligible for execution if all of its
-    // dependencies are finished.
-    for (String job : finishedJobs) {
-      for (WorkflowNode successor : workflowDag.getSuccessors(jobNameMap.get(job))) {
-        boolean eligible = true;
-
-        for (WorkflowNode predecessor : workflowDag.getPredecessors(successor)) {
-          String predecessorName = predecessor.getJobName();
-          if (!finishedJobs.contains(predecessorName)
-              && !executionFinishedJobs.contains(predecessorName)) {
-            eligible = false;
-          }
-        }
-        if (eligible) {
-          executableJobs.add(successor.getJobName());
-        }
-      }
-    }
-
-    LOG.info("Got (new): " + finishedJobs + ", returning: " + executableJobs);
-    return executableJobs;
-  }
-
-  @Override
   public int compare(WorkflowNode node, WorkflowNode other) {
-    // Higher priority should go first, eg. return a lower value.
-    return -(priorities.get(node) - priorities.get(other));
+    return priorities.get(node) - priorities.get(other);
   }
 
   @Override
@@ -201,11 +145,6 @@ class HighestLevelFirstPrioritizer extends WorkflowPrioritizer {
     out.writeInt(planningFinishedJobs.size());
     for (WorkflowNode node : planningFinishedJobs) {
       Text.writeString(out, node.getJobName());
-    }
-
-    out.writeInt(executionFinishedJobs.size());
-    for (String node : executionFinishedJobs) {
-      Text.writeString(out, node);
     }
   }
 
@@ -236,12 +175,6 @@ class HighestLevelFirstPrioritizer extends WorkflowPrioritizer {
     int numPlanningFinishedJobs = in.readInt();
     for (int i = 0; i < numPlanningFinishedJobs; i++) {
       planningFinishedJobs.add(jobNameMap.get(Text.readString(in)));
-    }
-
-    executionFinishedJobs = new HashSet<String>();
-    int numExecutionFinishedJobs = in.readInt();
-    for (int i = 0; i < numExecutionFinishedJobs; i++) {
-      executionFinishedJobs.add(Text.readString(in));
     }
   }
 

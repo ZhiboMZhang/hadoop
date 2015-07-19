@@ -68,6 +68,7 @@ public abstract class WorkflowSchedulingPlan implements Writable {
    *         false otherwise.
    */
   public abstract boolean matchMap(String machineType, String jobName);
+  public abstract boolean runMap(String machineType, String jobName);
 
   /**
    * Return whether a reduce task from a given job can be run (wrt/ the
@@ -80,6 +81,7 @@ public abstract class WorkflowSchedulingPlan implements Writable {
    *         false otherwise.
    */
   public abstract boolean matchReduce(String machineType, String jobName);
+  public abstract boolean runReduce(String machineType, String jobName);
 
   /**
    * Return a collection of jobs that are currently eligible for execution,
