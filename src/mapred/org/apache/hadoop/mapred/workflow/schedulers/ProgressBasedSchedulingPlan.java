@@ -273,6 +273,8 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
         // If the job doesn't have map tasks to schedule then we want
         // to schedule reduce events (at the current time).
         else {
+          // TODO: join so more even split between map & reduce
+          // TODO: rather than all map happening before reduces start
           addRedQueue.add(job);
         }
       }
@@ -426,16 +428,16 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
             scheduleEvents.remove(event);
           }
 
-          return true;
-        }
-      }
+          // Update time if the job has no map tasks left (it is done).
+          if (tasks.isEmpty()) {
+            TableKey key = new TableKey(jobName, machineType, false);
+            float execTime = table.get(key).execTime;
+            if (currentTime < event.time + execTime) {
+              currentTime = (long) Math.ceil(event.time + execTime);
+            }
+          }
 
-      // Update time if the job has no map tasks left (it is done).
-      if (tasks.isEmpty()) {
-        TableKey key = new TableKey(jobName, machineType, false);
-        float execTime = table.get(key).execTime;
-        if (currentTime < execTime) {
-          currentTime = (long) Math.floor(execTime);
+          return true;
         }
       }
     }
@@ -477,16 +479,16 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
             scheduleEvents.remove(event);
           }
 
-          return true;
-        }
-      }
+          // Update time if the job has no reduce tasks left (it is done).
+          if (tasks.isEmpty()) {
+            TableKey key = new TableKey(jobName, machineType, false);
+            float execTime = table.get(key).execTime;
+            if (currentTime < event.time + execTime) {
+              currentTime = (long) Math.ceil(event.time + execTime);
+            }
+          }
 
-      // Update time if the job has no reduce tasks left (it is done).
-      if (tasks.isEmpty()) {
-        TableKey key = new TableKey(jobName, machineType, false);
-        float execTime = table.get(key).execTime;
-        if (currentTime < execTime) {
-          currentTime = (long) Math.floor(execTime);
+          return true;
         }
       }
     }
@@ -500,6 +502,8 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     // Get the set of events to start at or before the current time.
     Set<SchedulingEvent> validEvents = new HashSet<SchedulingEvent>();
     List<String> validEventNames = new ArrayList<String>();
+    // TODO: i definitely need to take into account dependencies,
+    // TODO: so that jobs don't start until all deps are finished.
     while (scheduleEvents.peek().time <= currentTime) {
       SchedulingEvent event = scheduleEvents.poll();
       validEventNames.add(event.jobName);
