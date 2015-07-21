@@ -147,6 +147,7 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     workflowDag = WorkflowDAG.construct(machineTypes, machines, workflow);
     LOG.info("Constructed WorkflowDAG.");
 
+    // Set the taskMapping variable.
     for (WorkflowNode node : workflowDag.getNodes()) {
       taskMapping.put(node.getJobName(), node);
       LOG.info("Added pair: " + node.getJobName() + "/" + node);

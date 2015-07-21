@@ -4,6 +4,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -83,7 +84,7 @@ class HighestLevelFirstPrioritizer extends WorkflowPrioritizer {
 
   @Override
   // Runs during plan generation.
-  public List<WorkflowNode> getExecutableJobs(Set<WorkflowNode> finishedJobs) {
+  public List<WorkflowNode> getExecutableJobs(Collection<WorkflowNode> finishedJobs) {
 
     List<WorkflowNode> executableJobs = new ArrayList<WorkflowNode>();
 

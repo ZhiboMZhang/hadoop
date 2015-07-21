@@ -164,6 +164,9 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           final int mapCapacity = tts.getMaxMapSlots();
           final int runningMaps = tts.countMapTasks();
           final int availableMapSlots = mapCapacity - runningMaps;
+          LOG.info("Number of map slots: " + availableMapSlots);
+          LOG.info("Map capacity: " + mapCapacity);
+          LOG.info("Running maps: " + runningMaps);
 
           // Check if a task can be executed, and if so run it.
           if (availableMapSlots > 0
@@ -185,6 +188,9 @@ public class WorkflowTaskScheduler extends TaskScheduler implements
           final int reduceCapacity = tts.getMaxReduceSlots();
           final int runningReduces = tts.countReduceTasks();
           final int availableReduceSlots = reduceCapacity - runningReduces;
+          LOG.info("Number of reduce slots: " + availableReduceSlots);
+          LOG.info("Red capacity: " + reduceCapacity);
+          LOG.info("Running reduces: " + runningReduces);
 
           // Check if a task can be executed, and if so run it.
           if (availableReduceSlots > 0

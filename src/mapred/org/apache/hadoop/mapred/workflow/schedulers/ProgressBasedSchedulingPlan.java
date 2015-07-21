@@ -145,10 +145,16 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       Map<String, ResourceStatus> machines, Map<TableKey, TableEntry> table,
       WorkflowConf workflow) throws IOException {
 
+    LOG.info("In ProgressBasedSchedulingPlan generatePlan() function");
+
     this.table = table;
 
     // Get a mapping between actual available machines and machine types.
     trackerMapping = WorkflowUtil.matchResourceTypes(machineTypes, machines);
+
+    for (String type : trackerMapping.keySet()) {
+      LOG.info("Mapped machinetype " + type + " to " + trackerMapping.get(type));
+    }
 
     // Remove machine types that don't currently exist on the cluster.
     Iterator<MachineType> machineTypeIterator = machineTypes.iterator();
@@ -178,6 +184,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     // Set the taskMapping variable.
     for (WorkflowNode node : workflowDag.getNodes()) {
       taskMapping.put(node.getJobName(), node);
+      LOG.info("Added pair: " + node.getJobName() + "/" + node);
     }
     
     // Prioritize the jobs/nodes in the workflow dag by our criterion.
@@ -213,39 +220,39 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     redQueue.add(new FreeEvent(0, 0, totalRedSlots));
 
     // The job priority metric determines the first/next jobs to execute.
-    Queue<WorkflowNode> addQueue = new PriorityQueue<WorkflowNode>(11, prioritizer);
-    addQueue.addAll(prioritizer.getExecutableJobs(new HashSet<WorkflowNode>()));
-    LOG.info("The addQueue initially has " + addQueue.size() + " jobs.");
+    Queue<WorkflowNode> addMapQueue = new PriorityQueue<WorkflowNode>(11, prioritizer);
+    Queue<WorkflowNode> addRedQueue = new PriorityQueue<WorkflowNode>(11, prioritizer);
+    Queue<WorkflowNode> addSuccQueue = new PriorityQueue<WorkflowNode>(11, prioritizer);
+    Set<WorkflowNode> unfinishedJobs = new HashSet<WorkflowNode>();
+
+    addMapQueue.addAll(prioritizer.getExecutableJobs(new HashSet<WorkflowNode>()));
+    LOG.info("The addQueue initially has " + addMapQueue.size() + " jobs.");
 
     long currentTime = 0L;
     int freeMapSlots = 0;
     int freeRedSlots = 0;
 
     // Main loop, simulating execution on the slots.
-    while (!addQueue.isEmpty()) {
+    while (!addMapQueue.isEmpty() || !addRedQueue.isEmpty()) {
 
       // Free any slots at the current time.
       FreeEvent free;
       while ((free = mapQueue.peek()) != null && free.time <= currentTime) {
+        LOG.info("Added " + free.freedMapSlots + " freed map slots.");
         freeMapSlots += mapQueue.poll().freedMapSlots;
-        LOG.info("Added freed map slots.");
       }
       while ((free = redQueue.peek()) != null && free.time <= currentTime) {
+        LOG.info("Added " + free.freedRedSlots + " freed reduce slots.");
         freeRedSlots += redQueue.poll().freedRedSlots;
-        LOG.info("Added freed reduce slots.");
       }
-
-      Set<WorkflowNode> unfinishedJobs = new HashSet<WorkflowNode>();
-      Queue<WorkflowNode> addRedQueue = new PriorityQueue<WorkflowNode>(11, prioritizer);
-      Queue<WorkflowNode> addSuccQueue = new PriorityQueue<WorkflowNode>(11, prioritizer);
 
       // While there exist free slots AND we've not seen all jobs,
       // schedule tasks starting from high priority jobs.
-      while (freeMapSlots > 0 && !addQueue.isEmpty()) {
+      while (freeMapSlots > 0 && !addMapQueue.isEmpty()) {
         LOG.info("Looking for map tasks to schedule.");
 
         // Get the next highest priority job.
-        WorkflowNode job = addQueue.poll();
+        WorkflowNode job = addMapQueue.poll();
         String jobName = job.getJobName();
         LOG.info("Got next job to schedule maps for as " + jobName + ".");
 
@@ -253,13 +260,13 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
         int numMapTasks = mapTasks.get(jobName);
         if (numMapTasks > 0) {
 
+          // Add unfinished jobs back to the queue for next time.
+          unfinishedJobs.add(job);
+
           // Compute the number of maps that can be scheduled.
           int mapsToSchedule = Math.min(numMapTasks, freeMapSlots);
           int remainingMaps = numMapTasks - mapsToSchedule;
           LOG.info("Scheduling " + mapsToSchedule + " maps from job " + jobName);
-
-          // More tasks need to be scheduled after time is advanced.
-          unfinishedJobs.add(job);
 
           // Update the number of available slots and the task count for the job.
           mapTasks.put(jobName, remainingMaps);
@@ -280,11 +287,11 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
         // If the job doesn't have map tasks to schedule then we want
         // to schedule reduce events (at the current time).
         else {
-          // TODO: join so more even split between map & reduce
-          // rather than all map happening before reduces start
           addRedQueue.add(job);
         }
       }
+      addMapQueue.addAll(unfinishedJobs);
+      unfinishedJobs.clear();
 
       // While there exist free slots AND we've not seen all jobs,
       // schedule tasks starting from high priority jobs.
@@ -302,13 +309,13 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
         int numRedTasks = redTasks.get(jobName);
         if (numRedTasks > 0) {
 
+          // Add unfinished jobs back to the queue for the next time.
+          unfinishedJobs.add(job);
+
           // Compute the number of reduces that can be scheduled.
           int redsToSchedule = Math.min(numRedTasks, freeRedSlots);
           int remainingReds = numRedTasks - redsToSchedule;
           LOG.info("Scheduling " + redsToSchedule + " reds from job " + jobName);
-
-          // More tasks need to be scheduled after time is advanced.
-          unfinishedJobs.add(job);
 
           // Update the number of available slots and the task count for the job.
           redTasks.put(jobName, remainingReds);
@@ -332,24 +339,18 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
           addSuccQueue.add(job);
         }
       }
+      addRedQueue.addAll(unfinishedJobs);
+      unfinishedJobs.clear();
 
       // Add any successor jobs.
       if (!addSuccQueue.isEmpty()) {
         LOG.info("There are successors that can possibly be run.");
-        Set<WorkflowNode> finishedJobs = new HashSet<WorkflowNode>(
-            Arrays.asList(addSuccQueue.toArray(new WorkflowNode[0])));
-
+        List<WorkflowNode> finishedJobs = Arrays.asList(addSuccQueue.toArray(new WorkflowNode[0]));
         List<WorkflowNode> eligibleJobs = prioritizer.getExecutableJobs(finishedJobs);
-        if (!eligibleJobs.isEmpty()) {
-          LOG.info(("New jobs can be run: " + Arrays.toString(eligibleJobs.toArray(new WorkflowNode[0]))));
-          addQueue.addAll(eligibleJobs);
-        }
+        LOG.info(("New jobs can be run: " + Arrays.toString(eligibleJobs.toArray(new WorkflowNode[0]))));
+        if (!eligibleJobs.isEmpty()) { addMapQueue.addAll(eligibleJobs); }
+        addSuccQueue.clear();
       }
-
-      // Add all of the jobs which still have tasks to run back to the queue.
-      addQueue.addAll(unfinishedJobs);
-      LOG.info("Added back unfinished jobs to queue: "
-          + Arrays.toString(unfinishedJobs.toArray(new WorkflowNode[0])));
 
       // Advance the current time to the minimum of free slot event times.
       if (mapQueue.peek() != null || redQueue.peek() != null) {
@@ -409,58 +410,55 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     LOG.info("In runTask function (" + jobName + ").");
     LOG.info("Current time is: " + currentTime);
 
-    // Get the set of events to start at or before the current time.
-    Set<SchedulingEvent> validEvents = new HashSet<SchedulingEvent>();
-    while (scheduleEvents.peek().time <= currentTime) {
-      validEvents.add(scheduleEvents.poll());
+    // Get the next event to run (which starts before the current time).
+    SchedulingEvent event = scheduleEvents.peek();
+    if (event == null || event.time > currentTime) {
+      LOG.info("Job doesn't match.");
+      return false;
     }
-    scheduleEvents.addAll(validEvents);
-    LOG.info("Valid events are: " + Arrays.toString(validEvents.toArray(new SchedulingEvent[0])));
+    LOG.info("Next scheduling event is " + event);
 
-    // Find a job add/execution that matches.
-    for (SchedulingEvent event : validEvents) {
-      // Event must have tasks to still be in the requirement list.
-      if (taskType == TaskType.MAP && event.numMaps == 0) { continue; }
-      if (taskType == TaskType.REDUCE && event.numReduces == 0) { continue; }
-      if (!event.jobName.equals(jobName)) { continue; }
-      LOG.info("Event " + event + " matches queued job & has tasks to be run.");
+    // Event must have proper tasks to still be in the requirement list.
+    if (taskType == TaskType.MAP && event.numMaps == 0) { return false; }
+    if (taskType == TaskType.REDUCE && event.numReduces == 0) { return false; }
+    if (!event.jobName.equals(jobName)) { return false; }
+    LOG.info("Event " + event + " matches queued job & has tasks to be run.");
 
-      // Get the tasks from the job.
-      Collection<WorkflowTask> tasks = null;
-      WorkflowNode job = taskMapping.get(jobName);
-      if (taskType == TaskType.MAP) { tasks = job.getMapTasks(); }
-      if (taskType == TaskType.REDUCE) { tasks = job.getReduceTasks(); }
+    // Get the tasks from the job.
+    Collection<WorkflowTask> tasks = null;
+    WorkflowNode job = taskMapping.get(jobName);
+    if (taskType == TaskType.MAP) { tasks = job.getMapTasks(); }
+    if (taskType == TaskType.REDUCE) { tasks = job.getReduceTasks(); }
 
-      // Find a task that is supposed to run on the given machine type.
-      for (WorkflowTask task : tasks) {
-        if (machineType.equals(task.getMachineType())) {
-          LOG.info("Found a match: " + task);
+    // Find a task that is supposed to run on the given machine type.
+    for (WorkflowTask task : tasks) {
+      if (machineType.equals(task.getMachineType())) {
+        LOG.info("Found a match: " + task);
 
-          if (!isDryRun) {
-            // Don't update structures if this is a dry-run check/test.
-            if (taskType == TaskType.MAP) { event.numMaps--; }
-            if (taskType == TaskType.REDUCE) { event.numReduces--; }
-            tasks.remove(task);
+        if (!isDryRun) {
+          // Don't update structures if this is a dry-run check/test.
+          if (taskType == TaskType.MAP) { event.numMaps--; }
+          if (taskType == TaskType.REDUCE) { event.numReduces--; }
+          tasks.remove(task);
 
-            // Remove the event if it has no more tasks to be scheduled.
-            if (event.numMaps == 0 && event.numReduces == 0) {
-              LOG.info("Event has no more tasks, removing it.");
-              scheduleEvents.remove(event);
-            }
-
-            // Update time if the job has no map tasks left (it is done).
-            if (tasks.isEmpty()) {
-              LOG.info("Job has no more tasks, updating time.");
-              TableKey key = new TableKey(jobName, machineType, false);
-              float execTime = table.get(key).execTime;
-              if (currentTime < event.time + execTime) {
-                currentTime = (long) Math.ceil(event.time + execTime);
-              }
-            }
+          // Remove the event if it has no more tasks to be scheduled.
+          if (event.numMaps == 0 && event.numReduces == 0) {
+            LOG.info("Event has no more tasks, removing it.");
+            scheduleEvents.remove(event);
           }
 
-          return true;
+          // Update time if the job has no map tasks left (it is done).
+          if (tasks.isEmpty()) {
+            LOG.info("Job has no more tasks, updating time.");
+            TableKey key = new TableKey(jobName, machineType, false);
+            float execTime = table.get(key).execTime;
+            if (currentTime < event.time + execTime) {
+              currentTime = (long) Math.ceil(event.time + execTime);
+            }
+          }
         }
+
+        return true;
       }
     }
 
