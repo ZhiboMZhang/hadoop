@@ -101,8 +101,8 @@ public class RunJar {
     boolean jobInHdfs = false;
     String fileName = args[currentArg++];
 
-    // Check to see if the jar file is in hdfs. If so copy it to the local
-    // filesystem so that it can be unjarred and run. Then remove it after.
+    // Check to see if the jar file is in HDFS (Workflow Jobs). If so copy it to
+    // the local filesystem so that it can be unjarred and run. Then remove it.
     Configuration configuration = new Configuration();
     FileSystem hdfs = FileSystem.get(configuration);
     FileSystem localfs = FileSystem.getLocal(configuration);
@@ -128,11 +128,10 @@ public class RunJar {
       System.exit(-1);
     }
 
-    // Try to get any properties set in the manifest.
+    // Try to get any properties set in the manifest (Workflow Jobs).
     String mainClassName = null;
     String arguments = null;
-    String inputDirectory = null;
-    String outputDirectory = null;
+    String workflowId = null;
 
     JarFile jarFile;
     try {
@@ -141,13 +140,15 @@ public class RunJar {
 
       if (manifest != null) {
         // Class-Name attribute may be set even if others aren't.
+        // It's not specific to workflow jobs.
         try {
           mainClassName = manifest.getMainAttributes().getValue("Main-Class");
         } catch (IllegalArgumentException ia) {}
         try {
           arguments = manifest.getMainAttributes().getValue("Arguments");
-          inputDirectory = manifest.getMainAttributes().getValue("Input-Directory");
-          outputDirectory = manifest.getMainAttributes().getValue("Output-Directory");
+        } catch (IllegalArgumentException ia) {}
+        try {
+          workflowId = manifest.getMainAttributes().getValue("Workflow-Id");
         } catch (IllegalArgumentException ia) {}
       }
     } catch (IOException io) {
@@ -158,7 +159,8 @@ public class RunJar {
     // Check if a main class-name was supplied.
     if (mainClassName == null) {
       if (args.length < 2) {
-        System.err.println(usage);
+        System.err.println("The main class is required if not"
+            + " supplied in the jar manifest.");
         System.exit(-1);
       }
       mainClassName = args[currentArg++];
@@ -203,17 +205,21 @@ public class RunJar {
     
     ClassLoader loader = new URLClassLoader(classPath.toArray(new URL[0]));
 
-    // Set up and execute the jar file.
+    // Set up and execute the jar file: get the main class.
     Thread.currentThread().setContextClassLoader(loader);
     Class<?> mainClass = Class.forName(mainClassName, true, loader);
     Method main = mainClass.getMethod("main", new Class[] {
       Array.newInstance(String.class, 0).getClass()
     });
-    // Main-class and classpath are properly set, just consider args + io.
+
+    // The main-class and classpath are properly set, just have to consider
+    // arguments and input/output at this point.
     List<String> newArgsList = new ArrayList<String>();
     String[] newArgs = null;
-    if (args.length < 3 && inputDirectory != null && outputDirectory != null) {
-      // TODO: Clean up this whole thing.
+
+    // If the job is a workflow job, then input & output directories are set
+    // during job submission. So replace the IO directories with fake values.
+    if (workflowId != null) {
       newArgsList.addAll(Arrays.asList("/fakeInput", "/fakeOutput"));
       if (!arguments.equals("")) {
         newArgsList.addAll(Arrays.asList(arguments.split(" ")));
@@ -228,21 +234,23 @@ public class RunJar {
     newArgs = newArgsList.toArray(new String[0]);
 
     try {
-      System.out.println("Running " + mainClass.getCanonicalName()
-          + " with args: " + Arrays.toString(newArgs));
-      LOG.info("Running " + mainClass.getCanonicalName() + " with args: "
-          + Arrays.toString(newArgs));
+      String runningString = "Running " + mainClass.getCanonicalName()
+          + " with args: " + Arrays.toString(newArgs);
+      System.out.println(runningString);
+      LOG.info(runningString);
       main.invoke(null, new Object[] { newArgs });
 
+    } catch (InvocationTargetException e) {
+      throw e.getTargetException();
+
+    } finally {
       // Delete the job jar file if it was copied from HDFS.
       if (jobInHdfs) {
         Path localPath = localfs.makeQualified(new Path(fileName));
         localfs.delete(localPath, true);
         LOG.info("Jar file at " + localPath + " was deleted.");
       }
-
-    } catch (InvocationTargetException e) {
-      throw e.getTargetException();
     }
+
   }
 }
