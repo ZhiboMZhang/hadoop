@@ -359,17 +359,18 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
   private boolean runTask(String machineType, String jobName,
       TaskType taskType, boolean isDryRun) {
 
-    Collection<WorkflowTask> tasks = taskMapping.get(jobName).getTasks();
+    Collection<WorkflowTask> tasks = null;
+    if (taskType == TaskType.MAP) { tasks = taskMapping.get(jobName).getMapTasks(); }
+    if (taskType == TaskType.REDUCE) { tasks = taskMapping.get(jobName).getReduceTasks(); }
 
     for (WorkflowTask task : tasks) {
       String machine = task.getMachineType();
       String name = task.getJobName();
-      TaskType type = (task.isMapTask() ? TaskType.MAP : TaskType.REDUCE);
 
       LOG.info("Match input is " + machineType + "/" + jobName + "/" + taskType);
-      LOG.info("vs: " + machine + "/" + name + "/" + type);
+      LOG.info("vs: " + machine + "/" + name + "/" + taskType);
 
-      if (machine.equals(machineType) && name.equals(jobName) && type.equals(taskType)) {
+      if (machine.equals(machineType) && name.equals(jobName)) {
         LOG.info("Found a match!");
         if (!isDryRun) { tasks.remove(task); }
 

@@ -88,7 +88,8 @@ public class WorkflowNode implements Writable {
   }
 
   /**
-   * Return a collection of the tasks belonging to this job/node.
+   * Return a read-only view (membership changes have no affect on the
+   * underlying workflow job) of the tasks belonging to this job/node.
    */
   public Collection<WorkflowTask> getTasks() {
     Collection<WorkflowTask> tasks = new HashSet<WorkflowTask>();
