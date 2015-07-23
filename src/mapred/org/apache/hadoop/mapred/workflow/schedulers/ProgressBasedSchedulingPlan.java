@@ -124,15 +124,15 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
 
   // For generatePlan & class itself.
   private WorkflowDAG workflowDag;
+  private WorkflowPrioritizer prioritizer;
   private Map<String, WorkflowNode> taskMapping;  // job -> wfNode (tasks have machine)
   private Map<String, String> trackerMapping;  // trackerName -> machineType
-  private WorkflowPrioritizer prioritizer;
 
   // For match & executable job functions.
   private Map<TableKey, TableEntry> table;
   private Queue<SchedulingEvent> scheduleEvents;
-  private long currentTime = 0;
   private Set<String> finishedJobs;
+  private long currentTime = 0;
 
   public ProgressBasedSchedulingPlan() {
     taskMapping = new HashMap<String, WorkflowNode>();
@@ -413,15 +413,26 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     // Get the next event to run (which starts before the current time).
     SchedulingEvent event = scheduleEvents.peek();
     if (event == null || event.time > currentTime) {
-      LOG.info("Job doesn't match.");
+      LOG.info("Event is null or has time > currentTime.");
       return false;
     }
     LOG.info("Next scheduling event is " + event);
 
+    // Don't allow jobs that haven't actually been submitted.
+    // Also to find a match the names have to match :).
+    if (!event.jobName.equals(jobName)) {
+      LOG.info("Event job does not match job to be scheduled.");
+      return false;
+    }
     // Event must have proper tasks to still be in the requirement list.
-    if (taskType == TaskType.MAP && event.numMaps == 0) { return false; }
-    if (taskType == TaskType.REDUCE && event.numReduces == 0) { return false; }
-    if (!event.jobName.equals(jobName)) { return false; }
+    if (taskType == TaskType.MAP && event.numMaps == 0) {
+      LOG.info("No maps left to schedule for event " + event.jobName);
+      return false;
+    }
+    if (taskType == TaskType.REDUCE && event.numReduces == 0) {
+      LOG.info("No maps left to schedule for event" + event.jobName);
+      return false;
+    }
     LOG.info("Event " + event + " matches queued job & has tasks to be run.");
 
     // Get the tasks from the job.
@@ -441,14 +452,12 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
           if (taskType == TaskType.REDUCE) { event.numReduces--; }
           tasks.remove(task);
 
-          // Remove the event if it has no more tasks to be scheduled.
           if (event.numMaps == 0 && event.numReduces == 0) {
+            // Remove the event if it has no more tasks to be scheduled.
             LOG.info("Event has no more tasks, removing it.");
             scheduleEvents.remove(event);
-          }
 
-          // Update time if the job has no map tasks left (it is done).
-          if (tasks.isEmpty()) {
+            // Update time if the job has no tasks left (it is done).
             LOG.info("Job has no more tasks, updating time.");
             TableKey key = new TableKey(jobName, machineType, false);
             float execTime = table.get(key).execTime;
@@ -495,24 +504,25 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     LOG.info("Got as finished jobs: " + finishedJobs.toString());
     this.finishedJobs.addAll(finishedJobs);
 
-    // Get the set of events to start at or before the current time.
+    // Get the set of events that start at or before the current time.
     Set<SchedulingEvent> validEvents = new HashSet<SchedulingEvent>();
     List<String> validEventNames = new ArrayList<String>();
 
-    while (scheduleEvents.peek().time <= currentTime) {
-      SchedulingEvent event = scheduleEvents.poll();
+    SchedulingEvent event;
+    while ((event = scheduleEvents.peek()) != null && event.time <= currentTime) {
       validEventNames.add(event.jobName);
       validEvents.add(event);
+      scheduleEvents.poll();
     }
     scheduleEvents.addAll(validEvents);
-    LOG.info("Valid events are: " + Arrays.toString(validEvents.toArray(new SchedulingEvent[0])));
+    LOG.info("Valid events are: " + Arrays.toString(validEventNames.toArray()));
 
     // Ensure jobs with incomplete dependencies aren't returned.
     Iterator<String> validEventNamesIterator = validEventNames.iterator();
     while (validEventNamesIterator.hasNext()) {
-      String event = validEventNamesIterator.next();
-      LOG.info("Getting deps of job " + event);
-      WorkflowNode eventNode = taskMapping.get(event);
+      String eventName = validEventNamesIterator.next();
+      LOG.info("Getting deps of job " + eventName);
+      WorkflowNode eventNode = taskMapping.get(eventName);
       Set<WorkflowNode> predecessors = workflowDag.getPredecessors(eventNode);
       LOG.info("Deps are " + Arrays.toString(predecessors.toArray(new WorkflowNode[0])));
       Set<String> predecessorNames = new HashSet<String>();
@@ -521,7 +531,8 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       }
       // We can't execute a job until all its predecessors are complete.
       if (!this.finishedJobs.containsAll(predecessorNames)) {
-        LOG.info("Predecessors of " + event + " are not all finished, removing it.");
+        LOG.info("Predecessors of " + eventName + " are not all finished, removing it.");
+        LOG.info("Predecessors are: " + Arrays.toString(predecessorNames.toArray()));
         validEventNamesIterator.remove();
       }
     }
@@ -542,15 +553,15 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     workflowDag = new WorkflowDAG();
     workflowDag.readFields(in);
 
-    // Set the taskMapping variable.
-    for (WorkflowNode node : workflowDag.getNodes()) {
-      taskMapping.put(node.getJobName(), node);
-    }
-
     // TODO: reflection to select whatever prioritizer concrete type
     prioritizer = new HighestLevelFirstPrioritizer();
     prioritizer.setWorkflowDag(workflowDag);
     prioritizer.readFields(in);
+
+    // Set the taskMapping variable.
+    for (WorkflowNode node : workflowDag.getNodes()) {
+      taskMapping.put(node.getJobName(), node);
+    }
 
     trackerMapping = new HashMap<String, String>();
     int numTrackerMappings = in.readInt();
@@ -560,16 +571,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       trackerMapping.put(key, value);
     }
 
-    // For match functions.
-    currentTime = in.readLong();
-
-    int numRequirements = in.readInt();
-    for (int i = 0; i < numRequirements; i++) {
-      SchedulingEvent event = new SchedulingEvent();
-      event.readFields(in);
-      scheduleEvents.add(event);
-    }
-
+    // For match & executable job functions.
     table = new HashMap<TableKey, TableEntry>();
     int numTableEntries = in.readInt();
     for (int i = 0; i < numTableEntries; i++) {
@@ -580,10 +582,19 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       table.put(key, entry);
     }
 
+    int numRequirements = in.readInt();
+    for (int i = 0; i < numRequirements; i++) {
+      SchedulingEvent event = new SchedulingEvent();
+      event.readFields(in);
+      scheduleEvents.add(event);
+    }
+
     int numFinishedJobs = in.readInt();
     for (int i = 0; i < numFinishedJobs; i++) {
       finishedJobs.add(Text.readString(in));
     }
+
+    currentTime = in.readLong();
   }
 
   @Override
@@ -593,26 +604,28 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     workflowDag.write(out);
     prioritizer.write(out);
 
+    // Don't write out taskMapping as it's generated from the workflowDag.
+
     out.writeInt(trackerMapping.size());
     for (String key : trackerMapping.keySet()) {
       Text.writeString(out, key);
       Text.writeString(out, trackerMapping.get(key));
     }
 
-    // For match functions.
-    out.writeLong(currentTime);
-
-    out.writeInt(scheduleEvents.size());
-    for (SchedulingEvent event : scheduleEvents) { event.write(out); }
-
+    // For match & executable job functions.
     out.writeInt(table.size());
     for (TableKey key : table.keySet()) {
       key.write(out);
       table.get(key).write(out);
     }
 
+    out.writeInt(scheduleEvents.size());
+    for (SchedulingEvent event : scheduleEvents) { event.write(out); }
+
     out.writeInt(finishedJobs.size());
     for (String job : finishedJobs) { Text.writeString(out, job); }
+
+    out.writeLong(currentTime);
   }
 
 }
