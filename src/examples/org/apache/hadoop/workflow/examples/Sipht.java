@@ -28,16 +28,25 @@ import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
 
 public class Sipht {
 
+  // In a normal jobs, splits would be generated wrt/ input data size
+  // on the fly, whereas the input in workflow configuration is made to match
+  // the number of generated splits.
+  // For a SleepJob - where the user can input a requested number of splits -
+  // this means that the requested number of splits mocks the input data size,
+  // and as such we still need to record the actual number of splits to enter
+  // as configuration information in the workflow configuration.
   private static void addAndConfigSleepJob(WorkflowConf conf, String jobName,
-      int numMaps, int numReds, long mapTimeSeconds, long redTimeSeconds) throws IOException {
+      int numRequestedMaps, int numActualMaps, int numReds,
+      long mapTimeSeconds, long redTimeSeconds) throws IOException {
 
-    String jobArgs = numMaps + " " + numReds + " " + (mapTimeSeconds * 1000) + " " + (redTimeSeconds * 1000);
+    String jobArgs = numRequestedMaps + " " + numReds + " "
+      + (mapTimeSeconds * 1000) + " " + (redTimeSeconds * 1000);
 
     conf.addJob(jobName, "sleepjob.jar");
     conf.setJobMainClass(jobName, "org.apache.hadoop.workflow.examples.jobs.SleepJob");
     conf.setJobArguments(jobName, jobArgs);
 
-    conf.getJobs().get(jobName).setNumMapTasks(numMaps);
+    conf.getJobs().get(jobName).setNumMapTasks(numActualMaps);
     conf.getJobs().get(jobName).setNumReduceTasks(numReds);
   }
 
@@ -58,12 +67,12 @@ public class Sipht {
 
     // Right side of diagram
     // Set the # of maps to be the number of dependencies * each # of reduces.
-    addAndConfigSleepJob(conf, "patser-concat", 3, 1, 0, 0);
+    addAndConfigSleepJob(conf, "patser-concat", 3, 3, 1, 0, 0);
 
     for (int i = 1; i <= 3; i++) {
       String jobName = "patser-" + Integer.toString(i, 10);
 
-      addAndConfigSleepJob(conf, jobName, 3, 1, 0, 0);
+      addAndConfigSleepJob(conf, jobName, 3, 3, 1, 0, 0);
       // Assume 3 files in this directory = 3 maps.
       conf.setJobInputPaths(jobName, "/sipht-patser-input");
       conf.addDependency("patser-concat", jobName);
@@ -71,21 +80,21 @@ public class Sipht {
 
     // Left side of diagram, left to right, top to bottom.
     // Main workflow input has 2 files for input = 2 maps.
-    addAndConfigSleepJob(conf, "transterm", 2, 1, 0, 0);
-    addAndConfigSleepJob(conf, "findterm", 2, 1, 0, 0);
-    addAndConfigSleepJob(conf, "rna-motif", 2, 1, 0, 0);
-    addAndConfigSleepJob(conf, "blast", 2, 1, 0, 0);
+    addAndConfigSleepJob(conf, "transterm", 2, 2, 1, 0, 0);
+    addAndConfigSleepJob(conf, "findterm", 2, 2, 1, 0, 0);
+    addAndConfigSleepJob(conf, "rna-motif", 2, 2, 1, 0, 0);
+    addAndConfigSleepJob(conf, "blast", 2, 2, 1, 0, 0);
 
-    addAndConfigSleepJob(conf, "srna", 4, 1, 0, 0);
-    addAndConfigSleepJob(conf, "ffn-parse", 1, 1, 0, 0);
+    addAndConfigSleepJob(conf, "srna", 4, 4, 1, 0, 0);
+    addAndConfigSleepJob(conf, "ffn-parse", 1, 1, 1, 0, 0);
 
-    addAndConfigSleepJob(conf, "blast-synteny", 2, 1, 0, 0);
-    addAndConfigSleepJob(conf, "blast-candidate", 1, 1, 0, 0);
-    addAndConfigSleepJob(conf, "blast-qrna", 1, 1, 0, 0);
-    addAndConfigSleepJob(conf, "blast-paralogues", 1, 1, 0, 0);
+    addAndConfigSleepJob(conf, "blast-synteny", 2, 3, 1, 0, 0);
+    addAndConfigSleepJob(conf, "blast-candidate", 1, 1, 1, 0, 0);
+    addAndConfigSleepJob(conf, "blast-qrna", 1, 1, 1, 0, 0);
+    addAndConfigSleepJob(conf, "blast-paralogues", 1, 1, 1, 0, 0);
 
-    addAndConfigSleepJob(conf, "srna-annotate", 6, 1, 0, 0);
-    addAndConfigSleepJob(conf, "last-transfer", 1, 1, 0, 0);
+    addAndConfigSleepJob(conf, "srna-annotate", 6, 7, 1, 0, 0);
+    addAndConfigSleepJob(conf, "last-transfer", 1, 1, 1, 0, 0);
 
     // Specify remaining dependencies.
     conf.addDependency("last-transfer", "srna-annotate");
