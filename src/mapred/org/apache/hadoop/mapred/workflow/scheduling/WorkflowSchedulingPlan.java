@@ -62,12 +62,24 @@ public abstract class WorkflowSchedulingPlan implements Writable {
    * pairing) on the given machine type.
    *
    * @param machineType The machine type name.
-   * @param The job name.
+   * @param jobName The job name.
    *
    * @return True if a map task from the job can be run on the machine type,
    *         false otherwise.
    */
   public abstract boolean matchMap(String machineType, String jobName);
+
+  /**
+   * Return whether a map task from a given job can be run (wrt/ the scheduled
+   * pairing) on the given machine type. If a map task can be run, it is assumed
+   * that the map task will run successfully (the scheduling plan will be
+   * updated).
+   *
+   * @param machineType The machine type name.
+   * @param jobName The job name.
+   * @return True if a map task from the job can be run on the machine type,
+   *         false otherwise.
+   */
   public abstract boolean runMap(String machineType, String jobName);
 
   /**
@@ -81,6 +93,18 @@ public abstract class WorkflowSchedulingPlan implements Writable {
    *         false otherwise.
    */
   public abstract boolean matchReduce(String machineType, String jobName);
+
+  /**
+   * Return whether a reduce task from a given job can be run (wrt/ the
+   * scheduled pairing) on the given machine type. If a map task can be run, it
+   * is assumed that the reduce task will run successfully (the scheduling plan
+   * will be updated).
+   *
+   * @param machineType
+   * @param jobName
+   * @return True if a reduce task from the job can be run on the machine type,
+   *         false otherwise.
+   */
   public abstract boolean runReduce(String machineType, String jobName);
 
   /**
