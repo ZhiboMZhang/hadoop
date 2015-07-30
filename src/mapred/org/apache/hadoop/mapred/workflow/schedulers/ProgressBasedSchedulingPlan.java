@@ -444,7 +444,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     // Find a task that is supposed to run on the given machine type.
     for (WorkflowTask task : tasks) {
       if (machineType.equals(task.getMachineType())) {
-        LOG.info("Found a match: " + task);
+        LOG.info("Found a match!");
 
         if (!isDryRun) {
           // Don't update structures if this is a dry-run check/test.

@@ -229,12 +229,11 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
 
     for (WorkflowTask task : tasks) {
       String machine = task.getMachineType();
-      String name = task.getJobName();
 
-      LOG.info("Match input is " + machineType + "/" + jobName + "/" + taskType);
-      LOG.info("vs: " + machine + "/" + name + "/" + taskType);
+      LOG.info("Match input: " + machineType + "/" + jobName + "/" + taskType);
+      LOG.info("Match against: " + machine + "/" + jobName + "/" + taskType);
 
-      if (machine.equals(machineType) && name.equals(jobName)) {
+      if (machine.equals(machineType)) {
         LOG.info("Found a match!");
         if (!isDryRun) { tasks.remove(task); }
 
