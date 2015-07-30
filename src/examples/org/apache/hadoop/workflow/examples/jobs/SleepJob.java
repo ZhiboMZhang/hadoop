@@ -18,8 +18,11 @@
 package org.apache.hadoop.workflow.examples.jobs;
 
 import java.io.IOException;
+import java.util.Date;
 import java.util.Iterator;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.Path;
@@ -45,6 +48,8 @@ import org.apache.hadoop.util.ToolRunner;
  */
 public class SleepJob extends Configured implements Tool,
     Mapper<LongWritable, Text, Text, Text>, Reducer<Text, Text, Text, Text> {
+
+  private static final Log LOG = LogFactory.getLog(SleepJob.class);
 
   private static long TWENTY_SECONDS = 20000L;
 
@@ -150,7 +155,17 @@ public class SleepJob extends Configured implements Tool,
     FileInputFormat.setInputPaths(conf, new Path(args[0]));
     FileOutputFormat.setOutputPath(conf, new Path(args[1]));
 
+    // Record duration for testing.
+    Date startTime = new Date();
+    LOG.info("Job " + conf.getJobName() + " started: " + startTime);
+
     JobClient.runJob(conf);
+
+    Date endTime = new Date();
+    LOG.info("Job " + conf.getJobName() + " ended: " + endTime);
+
+    LOG.info("Job " + conf.getJobName() + " took "
+        + ((endTime.getTime() - startTime.getTime()) / 1000) + " seconds.");
 
     return 0;
   }
