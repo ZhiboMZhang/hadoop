@@ -130,7 +130,9 @@ class HighestLevelFirstPrioritizer extends WorkflowPrioritizer {
 
   @Override
   public int compare(WorkflowNode node, WorkflowNode other) {
-    return priorities.get(node) - priorities.get(other);
+    // The larger priority node should occur first
+    // (it is less than the smaller priority wrt/ ordering).
+    return priorities.get(other) - priorities.get(node);
   }
 
   @Override
