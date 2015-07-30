@@ -41,8 +41,6 @@ public class RandomWordCount {
     conf.addJob("RandomWriter", "randomtextwriter.jar");
     conf.addJob("WordCountNew", "wordcountnew.jar");
 
-    // TODO: any way I can compute / know from jobs run?
-    // TODO: however I'm already assuming that this is known.
     conf.getJobs().get("RandomWriter").setNumMapTasks(8);
     conf.getJobs().get("RandomWriter").setNumReduceTasks(0);
 

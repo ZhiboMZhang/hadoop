@@ -67,19 +67,17 @@ public class Sipht {
 
     // Right side of diagram
     // Set the # of maps to be the number of dependencies * each # of reduces.
-    addAndConfigSleepJob(conf, "patser-concat", 3, 3, 1, 0, 0);
+    addAndConfigSleepJob(conf, "patser-concat", 18, 18, 1, 0, 0);
 
-    for (int i = 1; i <= 3; i++) {
+    for (int i = 1; i <= 18; i++) {
       String jobName = "patser-" + Integer.toString(i, 10);
 
       addAndConfigSleepJob(conf, jobName, 3, 3, 1, 0, 0);
-      // Assume 3 files in this directory = 3 maps.
       conf.setJobInputPaths(jobName, "/sipht-patser-input");
       conf.addDependency("patser-concat", jobName);
     }
 
     // Left side of diagram, left to right, top to bottom.
-    // Main workflow input has 2 files for input = 2 maps.
     addAndConfigSleepJob(conf, "transterm", 2, 2, 1, 0, 0);
     addAndConfigSleepJob(conf, "findterm", 2, 2, 1, 0, 0);
     addAndConfigSleepJob(conf, "rna-motif", 2, 2, 1, 0, 0);
@@ -93,7 +91,7 @@ public class Sipht {
     addAndConfigSleepJob(conf, "blast-qrna", 1, 1, 1, 0, 0);
     addAndConfigSleepJob(conf, "blast-paralogues", 1, 1, 1, 0, 0);
 
-    addAndConfigSleepJob(conf, "srna-annotate", 6, 7, 1, 0, 0);
+    addAndConfigSleepJob(conf, "srna-annotate", 6, 9, 1, 0, 0);
     addAndConfigSleepJob(conf, "last-transfer", 1, 1, 1, 0, 0);
 
     // Specify remaining dependencies.
