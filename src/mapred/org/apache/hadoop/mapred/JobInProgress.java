@@ -22,6 +22,7 @@ import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -83,7 +84,10 @@ public class JobInProgress {
   }
 
   static final Log LOG = LogFactory.getLog(JobInProgress.class);
-    
+
+  // TODO: Remove after Workflow testing is complete.
+  private Map<TaskAttemptID, Date> taskStartTimes = new HashMap<TaskAttemptID, Date>();
+
   JobProfile profile;
   JobStatus status;
   String jobFile = null;
@@ -1759,6 +1763,10 @@ public class JobInProgress {
         speculativeMapTasks++;
       metrics.launchMap(id);
       this.queueMetrics.launchMap(id);
+
+      // TODO: Remove after Workflow testing is complete.
+      this.taskStartTimes.put(id, new Date());
+
     } else {
       ++runningReduceTasks;
       name = Values.REDUCE.name();
@@ -1767,6 +1775,10 @@ public class JobInProgress {
         speculativeReduceTasks++;
       metrics.launchReduce(id);
       this.queueMetrics.launchReduce(id);
+
+      // TODO: Remove after Workflow testing is complete.
+      this.taskStartTimes.put(id, new Date());
+
     }
     // Note that the logs are for the scheduled tasks only. Tasks that join on 
     // restart has already their logs in place.
@@ -1778,7 +1790,7 @@ public class JobInProgress {
     if (!tip.isJobSetupTask() && !tip.isJobCleanupTask()) {
       jobCounters.incrCounter(counter, 1);
     }
-    
+
     //TODO The only problem with these counters would be on restart.
     // The jobtracker updates the counter only when the task that is scheduled
     // if from a non-running tip and is local (data, rack ...). But upon restart
@@ -2713,6 +2725,15 @@ public class JobInProgress {
           checkCounterLimitsAndFail();
         }
       }
+
+      // TODO: Remove after Workflow testing is complete.
+      String jobName = this.getJobConf().getJobName();
+      Date taskStartTime = this.taskStartTimes.remove(taskid);
+      Date taskEndTime = new Date();
+      long duration = taskEndTime.getTime() - taskStartTime.getTime();
+      LOG.info("Job " + jobName + " map task took " + (duration / 1000)
+          + " seconds (" + duration + " ms).");
+
     } else {
       runningReduceTasks -= 1;
       if (oldNumAttempts > 1) {
@@ -2729,6 +2750,15 @@ public class JobInProgress {
           checkCounterLimitsAndFail();
         }
       }
+
+      // TODO: Remove after Workflow testing is complete.
+      String jobName = this.getJobConf().getJobName();
+      Date taskStartTime = this.taskStartTimes.remove(taskid);
+      Date taskEndTime = new Date();
+      long duration = taskEndTime.getTime() - taskStartTime.getTime();
+      LOG.info("Job " + jobName + " reduce task took " + (duration / 1000)
+          + " seconds (" + duration + " ms).");
+
     }
     return true;
   }

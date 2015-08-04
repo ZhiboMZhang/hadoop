@@ -164,8 +164,9 @@ public class SleepJob extends Configured implements Tool,
     Date endTime = new Date();
     LOG.info("Job " + conf.getJobName() + " ended: " + endTime);
 
-    LOG.info("Job " + conf.getJobName() + " took "
-        + ((endTime.getTime() - startTime.getTime()) / 1000) + " seconds.");
+    long duration = endTime.getTime() - startTime.getTime();
+    LOG.info("Job " + conf.getJobName() + " took " + (duration / 1000)
+        + " seconds (" + duration + " ms).");
 
     return 0;
   }

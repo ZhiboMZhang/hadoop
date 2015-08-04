@@ -1020,6 +1020,7 @@ public class JobClient extends Configured implements MRConstants, Tool  {
           FileSystem fs = submitJobDir.getFileSystem(jobCopy);
           LOG.debug("Creating splits at " + fs.makeQualified(submitJobDir));
           int maps = writeSplits(context, submitJobDir);
+          LOG.info("Number of computed splits for " + jobCopy.getJobName() + " is " + maps + ".");
           jobCopy.setNumMapTasks(maps);
 
           // write "queue admins of the queue to which job is being submitted"

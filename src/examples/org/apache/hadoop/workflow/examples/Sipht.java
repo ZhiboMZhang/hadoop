@@ -18,7 +18,10 @@ package org.apache.hadoop.workflow.examples;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Date;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileOutputFormat;
@@ -27,6 +30,8 @@ import org.apache.hadoop.mapred.workflow.WorkflowConf;
 import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
 
 public class Sipht {
+
+  private static final Log LOG = LogFactory.getLog(Sipht.class);
 
   // In a normal jobs, splits would be generated wrt/ input data size
   // on the fly, whereas the input in workflow configuration is made to match
@@ -122,6 +127,19 @@ public class Sipht {
     FileOutputFormat.setOutputPath(conf, new Path(args[1]));
 
     // Lastly, run the workflow.
+
+    // Record duration for testing.
+    Date startTime = new Date();
+    LOG.info("Workflow " + conf.getWorkflowName() + " started: " + startTime);
+
     WorkflowClient.runWorkflow(conf);
+
+    Date endTime = new Date();
+    LOG.info("Job " + conf.getWorkflowName() + " ended: " + endTime);
+
+    long duration = endTime.getTime() - startTime.getTime();
+    LOG.info("Job " + conf.getWorkflowName() + " took " + (duration / 1000)
+        + " seconds (" + duration + " ms).");
+
   }
 }
