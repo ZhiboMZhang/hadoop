@@ -62,13 +62,12 @@ public class Sipht {
 
     // Set any constraints.
     // Budget takes an amount in dollars.
-    // Deadline takes a time in any of seconds [s], minutes (m), or hours (h).
+    // Deadline takes a time in any of seconds (s), minutes (m), or hours (h).
     conf.setConstraint(Constraints.BUDGET, "4.52");
     conf.setConstraint(Constraints.DEADLINE, "30m");
 
     // Specify the jobs that comprise the workflow.
-    // Entries for these jobs must appear in the time-price table xml file.
-    // TODO: explain names (see 'Characterization of Scientific Workflows')
+    // Entries for these jobs must appear in the time-price table XML file.
 
     // Right side of diagram
     // Set the # of maps to be the number of dependencies * each # of reduces.
@@ -123,6 +122,7 @@ public class Sipht {
         "rna-motif",
         "blast"));
 
+    // Set workflow input and output paths.
     FileInputFormat.setInputPaths(conf, new Path(args[0]));
     FileOutputFormat.setOutputPath(conf, new Path(args[1]));
 

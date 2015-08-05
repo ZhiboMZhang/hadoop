@@ -61,8 +61,8 @@ import org.apache.hadoop.util.ReflectionUtils;
  * <code>WorkflowClient</code> is the primary interface for the user-workflow to
  * interact with the {@link JobTracker}.
  * 
- * 
  */
+// TODO: bug w/ multiple output/exit jobs.
 public class WorkflowClient extends Configured {
 
   /**
@@ -580,10 +580,8 @@ public class WorkflowClient extends Configured {
    * @throws IOException
    * @throws InterruptedException
    */
-  private void copyAndConfigureFiles(WorkflowConf workflow,
- Path submitDir,
-      FileSystem fileSystem) throws IOException,
-      InterruptedException {
+  private void copyAndConfigureFiles(WorkflowConf workflow, Path submitDir,
+      FileSystem fileSystem) throws IOException, InterruptedException {
 
     LOG.info("In WorkflowClient copyAndConfigureFiles function.");
 
