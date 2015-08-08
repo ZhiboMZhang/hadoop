@@ -117,10 +117,11 @@ public abstract class FileOutputFormat<K, V> implements OutputFormat<K, V> {
       TokenCache.obtainTokensForNamenodes(job.getCredentials(), 
                                           new Path[] {outDir}, job);
       
-      // check its existence
-      if (fs.exists(outDir)) {
-        throw new FileAlreadyExistsException("Output directory " + outDir + 
-                                             " already exists");
+      // Check for output directory existence.
+      // Workflow jobs can have the same output directory (exit jobs).
+      if (fs.exists(outDir) && job.getWorkflowId() == null) {
+        throw new FileAlreadyExistsException(
+            "Output directory " + outDir + " already exists");
       }
     }
   }
