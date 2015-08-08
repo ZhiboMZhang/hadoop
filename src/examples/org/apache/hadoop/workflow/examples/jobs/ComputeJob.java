@@ -42,31 +42,39 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
 /**
- * Dummy class for testing MR framefork. Sleeps for a defined period of time in
- * mapper and reducer. In addition to sleeping, it passes through input data
+ * Dummy class for testing the MapReduce framework.
+ *
+ * Computes an approximation of Pi with respect to a certain margin of error in
+ * the mapper. In addition to this computation, it passes through input data
  * while appending an indication that the data was received.
  */
-public class SleepJob extends Configured implements Tool,
+public class ComputeJob extends Configured implements Tool,
     Mapper<LongWritable, Text, Text, Text>, Reducer<Text, Text, Text, Text> {
 
-  private static final Log LOG = LogFactory.getLog(SleepJob.class);
+  private static final Log LOG = LogFactory.getLog(ComputeJob.class);
 
-  private static long TWENTY_SECONDS = 20000L;
-
-  private long mapSleepDuration = TWENTY_SECONDS;
-  private long reduceSleepDuration = TWENTY_SECONDS;
+  private float marginOfError = 0.001f;
   private String jobName = "N/A";
+
+  private void approximatePi(double marginOfError) {
+
+    double sum = 0d;
+    int counter = 0;
+
+    do {
+      sum += (Math.pow(-1, counter) / ((2 * counter) + 1));
+      counter++;
+
+    } while (((sum * 4) < (Math.PI - marginOfError))
+        || ((sum * 4) > (Math.PI + marginOfError)));
+  }
 
   @Override
   public void map(LongWritable key, Text value,
       OutputCollector<Text, Text> output, Reporter reporter) throws IOException {
 
-    try {
-      Thread.sleep(mapSleepDuration);
-    } catch (InterruptedException ie) {
-      throw new IOException("Map task for " + jobName
-          + " interrupted while sleeping.");
-    }
+    // Do some computation.
+    approximatePi(marginOfError);
 
     // The keys are the position in the file, which we don't care about.
     // Values are a line of text.
@@ -77,15 +85,10 @@ public class SleepJob extends Configured implements Tool,
 
   @Override
   public void reduce(Text key, Iterator<Text> values,
-      OutputCollector<Text, Text> output, Reporter reporter)
-      throws IOException {
+      OutputCollector<Text, Text> output, Reporter reporter) throws IOException {
 
-    try {
-      Thread.sleep(reduceSleepDuration);
-    } catch (InterruptedException ie) {
-      throw new IOException("Reduce task for " + jobName
-          + " interrupted while sleeping.");
-    }
+    // Do some computation.
+    approximatePi(marginOfError);
 
     // The keys are the job information. Continue the chain by prepending the
     // previous tasks to the value and putting ourself as the key.
@@ -97,51 +100,43 @@ public class SleepJob extends Configured implements Tool,
     }
   }
 
-
   @Override
   public void configure(JobConf job) {
-    this.mapSleepDuration = job.getLong("sleep.job.map.sleep.time", TWENTY_SECONDS);
-    this.reduceSleepDuration = job.getLong("sleep.job.reduce.sleep.time", TWENTY_SECONDS);
+    this.marginOfError = job.getFloat("compute.job.error", this.marginOfError);
     this.jobName = job.getJobName();
   }
 
   @Override
-  public void close() throws IOException {}
+  public void close() throws IOException {
+  }
 
-  public static void main(String[] args) throws Exception{
-    ToolRunner.run(new Configuration(), new SleepJob(), args);
+  public static void main(String[] args) throws Exception {
+    ToolRunner.run(new Configuration(), new ComputeJob(), args);
   }
 
   @Override
   public int run(String[] args) throws Exception {
 
-    if(args.length < 1) {
-      System.err.println("SleepJob <input> <output> <numMapper> <numReducer>"
-          + " <mapSleepTime (msec)> <reduceSleepTime (msec)>");
+    if (args.length < 1) {
+      System.err.println("ComputeJob <input> <output>"
+          + " <numMapper> <numReducer> <marginOfError>");
       ToolRunner.printGenericCommandUsage(System.err);
       return -1;
     }
-    
+
     int numMapper = Integer.parseInt(args[2]);
     int numReducer = Integer.parseInt(args[3]);
-    long mapSleepTime = TWENTY_SECONDS;
-    long reduceSleepTime = TWENTY_SECONDS;
+    if (args.length > 4) { marginOfError = Float.parseFloat(args[4]); }
 
-    if (args.length > 4) {
-      mapSleepTime = Long.parseLong(args[4]);
-      reduceSleepTime = Long.parseLong(args[5]);
-    }
+    JobConf conf = new JobConf(getConf(), ComputeJob.class);
 
-    JobConf conf = new JobConf(getConf(), SleepJob.class);
-
-    conf.setLong("sleep.job.map.sleep.time", mapSleepTime);
-    conf.setLong("sleep.job.reduce.sleep.time", reduceSleepTime);
+    conf.setFloat("compute.job.error", marginOfError);
 
     conf.setNumMapTasks(numMapper);
     conf.setNumReduceTasks(numReducer);
-    
-    conf.setMapperClass(SleepJob.class);
-    conf.setReducerClass(SleepJob.class);
+
+    conf.setMapperClass(ComputeJob.class);
+    conf.setReducerClass(ComputeJob.class);
     conf.setMapOutputKeyClass(Text.class);
     conf.setMapOutputValueClass(Text.class);
 
@@ -157,15 +152,15 @@ public class SleepJob extends Configured implements Tool,
 
     // Record duration for testing.
     Date startTime = new Date();
-    LOG.info("Job " + conf.getJobName() + " started: " + startTime);
+    LOG.info("TESTING: Job " + conf.getJobName() + " started: " + startTime);
 
     JobClient.runJob(conf);
 
     Date endTime = new Date();
-    LOG.info("Job " + conf.getJobName() + " ended: " + endTime);
+    LOG.info("TESTING: Job " + conf.getJobName() + " ended: " + endTime);
 
     long duration = endTime.getTime() - startTime.getTime();
-    LOG.info("Job " + conf.getJobName() + " took " + (duration / 1000)
+    LOG.info("TESTING: Job " + conf.getJobName() + " took " + (duration / 1000)
         + " seconds (" + duration + " ms).");
 
     return 0;

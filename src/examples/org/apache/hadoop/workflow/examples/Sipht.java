@@ -32,23 +32,23 @@ import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
 public class Sipht {
 
   private static final Log LOG = LogFactory.getLog(Sipht.class);
+  private static final float MARGIN_OF_ERROR = 0.0001f;
 
   // In a normal jobs, splits would be generated wrt/ input data size
   // on the fly, whereas the input in workflow configuration is made to match
   // the number of generated splits.
-  // For a SleepJob - where the user can input a requested number of splits -
+  // For a ComputeJob - where the user can input a requested number of splits -
   // this means that the requested number of splits mocks the input data size,
   // and as such we still need to record the actual number of splits to enter
   // as configuration information in the workflow configuration.
-  private static void addAndConfigSleepJob(WorkflowConf conf, String jobName,
-      int numRequestedMaps, int numActualMaps, int numReds,
-      long mapTimeSeconds, long redTimeSeconds) throws IOException {
+  private static void addAndConfigComputeJob(WorkflowConf conf, String jobName,
+      int numRequestedMaps, int numActualMaps, int numReds, float marginOfError)
+      throws IOException {
 
-    String jobArgs = numRequestedMaps + " " + numReds + " "
-      + (mapTimeSeconds * 1000) + " " + (redTimeSeconds * 1000);
+    String jobArgs = numRequestedMaps + " " + numReds + " " + marginOfError;
 
-    conf.addJob(jobName, "sleepjob.jar");
-    conf.setJobMainClass(jobName, "org.apache.hadoop.workflow.examples.jobs.SleepJob");
+    conf.addJob(jobName, "computejob.jar");
+    conf.setJobMainClass(jobName, "org.apache.hadoop.workflow.examples.jobs.ComputeJob");
     conf.setJobArguments(jobName, jobArgs);
 
     conf.getJobs().get(jobName).setNumMapTasks(numActualMaps);
@@ -71,32 +71,32 @@ public class Sipht {
 
     // Right side of diagram
     // Set the # of maps to be the number of dependencies * each # of reduces.
-    addAndConfigSleepJob(conf, "patser-concat", 18, 18, 1, 0, 0);
+    addAndConfigComputeJob(conf, "patser-concat", 18, 18, 1, MARGIN_OF_ERROR);
 
     for (int i = 1; i <= 18; i++) {
       String jobName = "patser-" + Integer.toString(i, 10);
 
-      addAndConfigSleepJob(conf, jobName, 3, 3, 1, 0, 0);
+      addAndConfigComputeJob(conf, jobName, 3, 3, 1, MARGIN_OF_ERROR);
       conf.setJobInputPaths(jobName, "/sipht-patser-input");
       conf.addDependency("patser-concat", jobName);
     }
 
     // Left side of diagram, left to right, top to bottom.
-    addAndConfigSleepJob(conf, "transterm", 2, 2, 1, 0, 0);
-    addAndConfigSleepJob(conf, "findterm", 2, 2, 1, 0, 0);
-    addAndConfigSleepJob(conf, "rna-motif", 2, 2, 1, 0, 0);
-    addAndConfigSleepJob(conf, "blast", 2, 2, 1, 0, 0);
+    addAndConfigComputeJob(conf, "transterm", 2, 2, 1, MARGIN_OF_ERROR);
+    addAndConfigComputeJob(conf, "findterm", 2, 2, 1, MARGIN_OF_ERROR);
+    addAndConfigComputeJob(conf, "rna-motif", 2, 2, 1, MARGIN_OF_ERROR);
+    addAndConfigComputeJob(conf, "blast", 2, 2, 1, MARGIN_OF_ERROR);
 
-    addAndConfigSleepJob(conf, "srna", 4, 4, 1, 0, 0);
-    addAndConfigSleepJob(conf, "ffn-parse", 1, 1, 1, 0, 0);
+    addAndConfigComputeJob(conf, "srna", 4, 4, 1, MARGIN_OF_ERROR);
+    addAndConfigComputeJob(conf, "ffn-parse", 1, 1, 1, MARGIN_OF_ERROR);
 
-    addAndConfigSleepJob(conf, "blast-synteny", 2, 3, 1, 0, 0);
-    addAndConfigSleepJob(conf, "blast-candidate", 1, 1, 1, 0, 0);
-    addAndConfigSleepJob(conf, "blast-qrna", 1, 1, 1, 0, 0);
-    addAndConfigSleepJob(conf, "blast-paralogues", 1, 1, 1, 0, 0);
+    addAndConfigComputeJob(conf, "blast-synteny", 2, 3, 1, MARGIN_OF_ERROR);
+    addAndConfigComputeJob(conf, "blast-candidate", 1, 1, 1, MARGIN_OF_ERROR);
+    addAndConfigComputeJob(conf, "blast-qrna", 1, 1, 1, MARGIN_OF_ERROR);
+    addAndConfigComputeJob(conf, "blast-paralogues", 1, 1, 1, MARGIN_OF_ERROR);
 
-    addAndConfigSleepJob(conf, "srna-annotate", 6, 9, 1, 0, 0);
-    addAndConfigSleepJob(conf, "last-transfer", 1, 1, 1, 0, 0);
+    addAndConfigComputeJob(conf, "srna-annotate", 6, 9, 1, MARGIN_OF_ERROR);
+    addAndConfigComputeJob(conf, "last-transfer", 1, 1, 1, MARGIN_OF_ERROR);
 
     // Specify remaining dependencies.
     conf.addDependency("last-transfer", "srna-annotate");
