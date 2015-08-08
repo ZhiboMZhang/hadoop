@@ -430,7 +430,7 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
       return false;
     }
     if (taskType == TaskType.REDUCE && event.numReduces == 0) {
-      LOG.info("No maps left to schedule for event" + event.jobName);
+      LOG.info("No reduces left to schedule for event" + event.jobName);
       return false;
     }
     LOG.info("Event " + event + " matches queued job & has tasks to be run.");

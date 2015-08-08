@@ -16,8 +16,7 @@ import org.apache.hadoop.mapred.workflow.WorkflowConf.Constraints;
 public class Ligo {
 
   private static final Log LOG = LogFactory.getLog(Ligo.class);
-  // private static final float MARGIN_OF_ERROR = 1.0E-7f;
-  private static final float MARGIN_OF_ERROR = 2;
+  private static final float MARGIN_OF_ERROR = 1.0E-7f;
 
   // In a normal jobs, splits would be generated wrt/ input data size
   // on the fly, whereas the input in workflow configuration is made to match
