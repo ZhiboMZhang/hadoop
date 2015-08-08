@@ -2731,8 +2731,8 @@ public class JobInProgress {
       Date taskStartTime = this.taskStartTimes.remove(taskid);
       Date taskEndTime = new Date();
       long duration = taskEndTime.getTime() - taskStartTime.getTime();
-      LOG.info("Job " + jobName + " map task took " + (duration / 1000)
-          + " seconds (" + duration + " ms).");
+      LOG.info("TESTING: Job " + jobName + " map task took "
+          + (duration / 1000) + " seconds (" + duration + " ms).");
 
     } else {
       runningReduceTasks -= 1;
@@ -2756,8 +2756,8 @@ public class JobInProgress {
       Date taskStartTime = this.taskStartTimes.remove(taskid);
       Date taskEndTime = new Date();
       long duration = taskEndTime.getTime() - taskStartTime.getTime();
-      LOG.info("Job " + jobName + " reduce task took " + (duration / 1000)
-          + " seconds (" + duration + " ms).");
+      LOG.info("TESTING: Job " + jobName + " reduce task took "
+          + (duration / 1000) + " seconds (" + duration + " ms).");
 
     }
     return true;

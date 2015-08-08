@@ -51,7 +51,9 @@ import org.apache.hadoop.mapred.workflow.scheduling.WorkflowSchedulingPlan;
 import org.apache.hadoop.mapreduce.server.jobtracker.TaskTracker;
 import org.apache.hadoop.util.RunJar;
 
-
+// TODO: seems to be some sort of race condition occurring with last job,
+// it finishes but this isnt reflected in the actual status, so the workflow
+// doesn't actually formally complete.
 public class WorkflowTaskScheduler extends TaskScheduler implements
     WorkflowScheduler {
 
