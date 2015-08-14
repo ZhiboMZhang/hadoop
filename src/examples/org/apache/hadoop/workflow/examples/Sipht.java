@@ -58,7 +58,7 @@ public class Sipht {
   public static void main(String[] args) throws Exception {
 
     // Allow budget to be optionally passed into the function.
-    String budget = "4.52";
+    String budget = "0.00";
     if (args.length > 2) { budget = args[2]; }
 
     WorkflowConf conf = new WorkflowConf(Sipht.class);
