@@ -212,6 +212,15 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
     LOG.info("Workflow budget constraint: $" + maxCost);
     LOG.info("Workflow deadline constraint: N/A");
 
+    LOG.info("Task Mapping:");
+    for (String jobName : taskMapping.keySet()) {
+      WorkflowNode node = taskMapping.get(jobName);
+      for (WorkflowTask task : node.getTasks()) {
+        LOG.info("Mapped " + jobName + "." + task.getName() + " to: "
+            + task.getMachineType());
+      }
+    }
+
     return true;
   }
 
