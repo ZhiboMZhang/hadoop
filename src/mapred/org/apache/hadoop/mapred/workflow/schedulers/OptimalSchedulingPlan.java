@@ -153,20 +153,23 @@ public class OptimalSchedulingPlan extends WorkflowSchedulingPlan {
     }
     
     // Generate the permutations.
-    List<List<MachineType>> permutations =
-        WorkflowUtil.<MachineType> getPermutations(machineTypes, tasks.size());
+    PermutationGenerator<MachineType> permutationGenerator =
+        new PermutationGenerator<MachineType>(machineTypes, tasks.size());
+
     LOG.info("Generated machineType permutations.");
 
     // Pair up a permutation to the task list.
+    long currentPermutation = 1;
     float minTime = Float.MAX_VALUE;
     Map<WorkflowTask, String> optimalScheduling = new HashMap<WorkflowTask, String>();
 
-    for (List<MachineType> permutation : permutations) {
+    while (permutationGenerator.hasNext()) {
+      List<MachineType> permutation = permutationGenerator.next();
 
       for (int i = 0; i < tasks.size(); i++) {
         tasks.get(i).setMachineType(permutation.get(i).getName());
       }
-      LOG.info("Set " + permutations.indexOf(permutation) + "th permutation.");
+      LOG.info("Set " + currentPermutation++ + "th permutation.");
       LOG.info("Permutation is: " + Arrays.toString(permutation.toArray(new MachineType[0])));
 
       // Calculate the cost and time.

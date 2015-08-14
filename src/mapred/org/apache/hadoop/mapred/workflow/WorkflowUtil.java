@@ -16,11 +16,9 @@
  */
 package org.apache.hadoop.mapred.workflow;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -92,39 +90,6 @@ public class WorkflowUtil {
         - status.getTotalPhysicalMemory());
 
     return (float) (Math.sqrt(cpu) + proc + Math.sqrt(mem));
-  }
-
-  /**
-   * Get all permutations of a certain length with replacement from a collection
-   * of objects.
-   *
-   * @param types A collection of possible values that each element in the
-   *          permutation can be.
-   * @param size The number of elements in / size of the permutation.
-   *
-   * @return A list of permutations.
-   */
-  public static <T> List<List<T>> getPermutations(Collection<T> types, long size) {
-
-    List<List<T>> permutations = new ArrayList<List<T>>();
-
-    if (size == 1) {
-      for (T type : types) {
-        List<T> newPermutation = new ArrayList<T>();
-        newPermutation.add(type);
-        permutations.add(newPermutation);
-      }
-    } else {
-      for (List<T> permutation : getPermutations(types, size - 1)) {
-        for (T type : types) {
-          List<T> newPermutation = new ArrayList<T>(permutation);
-          newPermutation.add(type);
-          permutations.add(newPermutation);
-        }
-      }
-    }
-
-    return permutations;
   }
 
   // Some debugging facilities.
