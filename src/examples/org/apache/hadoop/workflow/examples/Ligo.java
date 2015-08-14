@@ -51,8 +51,7 @@ public class Ligo {
     // Set any constraints.
     // Budget takes an amount in dollars.
     // Deadline takes a time in any of seconds (s), minutes (m), or hours (h).
-    conf.setConstraint(Constraints.BUDGET, "4.23");
-    conf.setConstraint(Constraints.DEADLINE, "30m");
+    conf.setConstraint(Constraints.BUDGET, budget);
 
     // Specify the jobs that comprise the workflow.
     // Entries for these jobs must appear in the time-price table XML file.
