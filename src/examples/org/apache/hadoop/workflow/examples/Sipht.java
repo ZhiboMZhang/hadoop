@@ -57,8 +57,9 @@ public class Sipht {
 
   public static void main(String[] args) throws Exception {
 
-    // Allow margin of error to be optionally passed into the function.
-    // if (args.length > 2) { MARGIN_OF_ERROR = Float.parseFloat(args[2]); }
+    // Allow budget to be optionally passed into the function.
+    String budget = "4.52";
+    if (args.length > 2) { budget = args[2]; }
 
     WorkflowConf conf = new WorkflowConf(Sipht.class);
     conf.setWorkflowName("SIPHT");
