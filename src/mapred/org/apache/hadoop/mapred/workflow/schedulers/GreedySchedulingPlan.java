@@ -316,6 +316,8 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
       WorkflowTaskPair pair, Map<String, MachineType> machineType,
       List<MachineType> sortedMachineTypes) {
 
+    float utility = 0f;
+
     // Time & Cost for slowest task on current machine.
     TableKey slowestCurKey = new TableKey(
         pair.slowest.getJobName(),
@@ -336,16 +338,26 @@ public class GreedySchedulingPlan extends WorkflowSchedulingPlan {
     float slowestNewCost = table.get(slowestNewKey).cost;
 
     // Time for second-slowest task on its current machine.
-    TableKey secondSlowestCurKey = new TableKey(
-        pair.secondSlowest.getJobName(),
-        pair.secondSlowest.getMachineType(),
-        pair.secondSlowest.isMapTask());
-    float secondSlowestCurTime = table.get(secondSlowestCurKey).execTime;
+    float secondSlowestCurTime = 0f;
+
+    if (pair.secondSlowest != null) {
+      TableKey secondSlowestCurKey = new TableKey(
+          pair.secondSlowest.getJobName(), pair.secondSlowest.getMachineType(),
+          pair.secondSlowest.isMapTask());
+      secondSlowestCurTime = table.get(secondSlowestCurKey).execTime;
+    }
 
     // Compute and return the utility.
-    return Math.min((slowestCurTime - slowestNewTime),
-        (slowestCurTime - secondSlowestCurTime))
-        / (slowestNewCost - slowestCurCost);
+    if (pair.secondSlowest != null) {
+      utility = Math.min((slowestCurTime - slowestNewTime),
+          (slowestCurTime - secondSlowestCurTime))
+          / (slowestNewCost - slowestCurCost);
+    } else {
+      utility = (slowestCurTime - slowestNewTime)
+          / (slowestNewCost - slowestCurCost);
+    }
+
+    return utility;
   }
 
   /**
