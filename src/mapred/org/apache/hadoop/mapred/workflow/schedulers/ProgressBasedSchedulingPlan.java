@@ -379,6 +379,15 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
     }
     LOG.info("Done listing events.");
 
+    LOG.info("Task Mapping:");
+    for (String jobName : taskMapping.keySet()) {
+      WorkflowNode node = taskMapping.get(jobName);
+      for (WorkflowTask task : node.getTasks()) {
+        LOG.info("Mapped " + jobName + "." + task.getName() + " to: "
+            + task.getMachineType());
+      }
+    }
+
     // Not meeting any constraints, so schedule is always valid.
     return true;
   }
