@@ -469,10 +469,10 @@ public class ProgressBasedSchedulingPlan extends WorkflowSchedulingPlan {
             // Update time if the job has no tasks left (it is done).
             LOG.info("Job has no more tasks, updating time.");
             TableKey key = new TableKey(jobName, machineType, (taskType == TaskType.MAP));
-            float execTime = table.get(key).execTime;
+            long execTime = table.get(key).execTime;
             if (currentTime < event.time + execTime) {
               LOG.info("Updating current time: " + currentTime + " < " + event.time + " + " + execTime);
-              currentTime = (long) Math.ceil(event.time + execTime);
+              currentTime = event.time + execTime;
               LOG.info("Current time is now: " + currentTime);
             }
           }
